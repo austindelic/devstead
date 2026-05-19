@@ -112,7 +112,13 @@ MonoBehaviour:
   m_LutShader: {fileID: 4800000, guid: b2d9c6e519415af43a8d8e54c3ca5a4d, type: 3}
   m_Precomputation: 0
   m_FallbackSkyMaterial: {fileID: 2100000, guid: 7c6697a3d51c9324c8e9ad3284a1ac04, type: 2}
+  m_MoonSurfaceTexture: {fileID: 2800000, guid: 662a89fac459049dc861d1b54eed1807, type: 3}
   m_VolumetricCloudsMaterial: {fileID: 2100000, guid: 3748131af20412e478461c6445c73923, type: 2}
+  m_SpaceEmissionHorizonFadeStart: 0.01
+  m_SpaceEmissionHorizonFadeEnd: 0.22
+  m_SpaceEmissionContrast: 1.8
+  m_SpaceEmissionSaturation: 0.65
+  m_SpaceEmissionTwinkleStrength: 0.06
 --- !u!114 &6129600530961482533
 MonoBehaviour:
   m_ObjectHideFlags: 0

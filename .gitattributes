@@ -68,6 +68,7 @@
 
 # Exclude from GitHub stats and diffs: third-party plugins, packages lock file
 Assets/Plugins/**           linguist-generated
+Assets/ThirdParty/**        linguist-generated
 Packages/packages-lock.json linguist-generated
 
 # Unity LFS

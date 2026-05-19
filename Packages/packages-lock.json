@@ -1,5 +1,11 @@
 {
   "dependencies": {
+    "dev.dyrda.milky-way-skybox": {
+      "version": "file:dev.dyrda.milky-way-skybox",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {}
+    },
     "com.jiaozi158.unity-physically-based-sky-urp": {
       "version": "file:com.jiaozi158.unity-physically-based-sky-urp",
       "depth": 0,

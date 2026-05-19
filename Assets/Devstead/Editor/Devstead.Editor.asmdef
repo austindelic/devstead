@@ -1,0 +1,22 @@
+{
+    "name": "Devstead.Editor",
+    "rootNamespace": "Devstead.Editor",
+    "references": [
+        "GUID:8554a9109dc243c29989a8a76d0ca24c",
+        "GUID:df380645f10b7bc4b97d4f5eb6303d95",
+        "GUID:15fc0a57446b3144c949da3e2b9737a9",
+        "GUID:df833852e432e964ba35e02ff0ed74a0",
+        "GUID:4e5cd923c15d98644bd2779e74e6a0f8"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
