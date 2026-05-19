@@ -36,7 +36,7 @@ namespace Devstead.Editor.Rendering
 
             changed |= SetObjectName(sun.gameObject, "Sun");
             changed |= SetTransform(sun.transform, new Vector3(0.0f, 3.0f, 0.0f), Quaternion.Euler(45.0f, -30.0f, 0.0f), Vector3.one);
-            changed |= SetLight(sun, MainSunIntensity, 5000.0f, LightShadows.Soft);
+            changed |= SetLight(sun, MainSunIntensity, MainSunColorTemperature, LightShadows.Soft);
             changed |= RemoveSunRotator(sun.gameObject);
 
             if (RenderSettings.sun != sun)
@@ -84,7 +84,7 @@ namespace Devstead.Editor.Rendering
 
             changed |= SetObjectName(moon.gameObject, "Moon");
             changed |= SetTransform(moonTransform, Vector3.zero, desiredRotation, Vector3.one);
-            changed |= SetLight(moon, MoonIntensity, 7000.0f, LightShadows.None);
+            changed |= SetLight(moon, MoonIntensity, MoonColorTemperature, LightShadows.None);
             changed |= RemoveSunRotator(moon.gameObject);
 
             if (sun != null && RenderSettings.sun != sun)

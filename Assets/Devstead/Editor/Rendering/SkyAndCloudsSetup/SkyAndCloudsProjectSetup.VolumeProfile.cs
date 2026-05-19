@@ -111,6 +111,12 @@ namespace Devstead.Editor.Rendering
                 changed |= ConfigureScreenSpaceReflectionVolume(screenSpaceReflection);
             }
 
+            var screenSpaceGlobalIllumination = GetOrCreateScreenSpaceGlobalIlluminationVolume(profile, ref changed);
+            if (screenSpaceGlobalIllumination != null)
+            {
+                changed |= ConfigureScreenSpaceGlobalIlluminationVolume(screenSpaceGlobalIllumination);
+            }
+
             if (changed)
             {
                 EditorUtility.SetDirty(profile);
@@ -122,6 +128,61 @@ namespace Devstead.Editor.Rendering
                 {
                     EditorUtility.SetDirty(screenSpaceReflection);
                 }
+
+                if (screenSpaceGlobalIllumination != null)
+                {
+                    EditorUtility.SetDirty(screenSpaceGlobalIllumination);
+                }
+            }
+
+            return changed;
+        }
+
+        private static VolumeComponent GetOrCreateScreenSpaceGlobalIlluminationVolume(VolumeProfile profile, ref bool changed)
+        {
+            var componentType = System.Type.GetType("ScreenSpaceGlobalIlluminationVolume, SSGIURP");
+            if (componentType == null)
+            {
+                Debug.LogWarning("Sky and Clouds setup could not find ScreenSpaceGlobalIlluminationVolume. Import UnitySSGIURP and re-run setup.");
+                return null;
+            }
+
+            var component = profile.components.FirstOrDefault(volumeComponent =>
+                volumeComponent != null && volumeComponent.GetType() == componentType);
+
+            if (component != null)
+            {
+                return component;
+            }
+
+            component = profile.Add(componentType, false);
+            changed = true;
+            return component;
+        }
+
+        private static bool ConfigureScreenSpaceGlobalIlluminationVolume(VolumeComponent component)
+        {
+            var componentObject = new SerializedObject(component);
+            var changed = false;
+
+            changed |= SetActive(component, true);
+            changed |= SetVolumeParameter(componentObject, "enable", true, true);
+            changed |= SetVolumeParameter(componentObject, "quality", 1, true);
+            changed |= SetVolumeParameter(componentObject, "thicknessMode", 0, true);
+            changed |= SetVolumeParameter(componentObject, "depthBufferThickness", 0.1f, true);
+            changed |= SetVolumeParameter(componentObject, "fullResolutionSS", false, true);
+            changed |= SetVolumeParameter(componentObject, "resolutionScaleSS", 0.5f, true);
+            changed |= SetVolumeParameter(componentObject, "sampleCount", 2, true);
+            changed |= SetVolumeParameter(componentObject, "maxRaySteps", 32, true);
+            changed |= SetVolumeParameter(componentObject, "denoiseSS", true, true);
+            changed |= SetVolumeParameter(componentObject, "denoiserAlgorithmSS", 1, true);
+            changed |= SetVolumeParameter(componentObject, "secondDenoiserPassSS", true, true);
+            changed |= SetVolumeParameter(componentObject, "rayMiss", 3, true);
+            changed |= SetVolumeParameter(componentObject, "indirectDiffuseLightingMultiplier", 1.0f, true);
+
+            if (changed)
+            {
+                componentObject.ApplyModifiedPropertiesWithoutUndo();
             }
 
             return changed;

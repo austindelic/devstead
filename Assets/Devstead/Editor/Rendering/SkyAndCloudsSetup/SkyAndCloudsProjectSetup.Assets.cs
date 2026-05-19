@@ -31,6 +31,12 @@ namespace Devstead.Editor.Rendering
             return string.IsNullOrEmpty(path) ? null : AssetDatabase.LoadAssetAtPath<Material>(path);
         }
 
+        private static Shader LoadScreenSpaceGlobalIlluminationShader()
+        {
+            var path = AssetDatabase.GUIDToAssetPath(ScreenSpaceGlobalIlluminationShaderGuid);
+            return string.IsNullOrEmpty(path) ? null : AssetDatabase.LoadAssetAtPath<Shader>(path);
+        }
+
         private static Texture2D LoadMoonTexture()
         {
             return AssetDatabase.LoadAssetAtPath<Texture2D>(MoonTexturePath);

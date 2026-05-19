@@ -95,6 +95,7 @@ Shader "Oceana/WaterSurface" {
             uniform float4 _ZBufferParams;
             uniform float3 _WorldSpaceCameraPos;
             uniform float4 _MainLightPosition;
+            uniform float4 _MainLightColor;
             uniform float _DevsteadNightWaterFactor;
             uniform float4x4 _MainLightWorldToLight;
             uniform float _MainLightCookieTextureFormat;
@@ -125,6 +126,12 @@ Shader "Oceana/WaterSurface" {
         float3 SampleSkyReflection(float3 viewDir, float3 normal) {
             float3 reflectionDir = reflect(-viewDir, normal);
             return _GlossyEnvironmentCubeMap.SampleLevel(_bilinearRepeatSampler, reflectionDir, _SkyReflectionMip).rgb * _PlanarReflectionBrightness;
+        }
+
+        float3 GetMainLightChromaticity() {
+            float3 lightColor = max(_MainLightColor.rgb, 0.0);
+            float maxChannel = max(max(lightColor.r, lightColor.g), lightColor.b);
+            return maxChannel > 0.0001 ? lightColor / maxChannel : 1.0;
         }
 
         float SampleMainLightCookieValue(float3 positionWS) {
@@ -232,6 +239,7 @@ Shader "Oceana/WaterSurface" {
                 float specularMask = pow(SpecularBRF(viewDir, normal, _MainLightPosition.xyz), pow(2, _GlareSpecular * 8)) * _GlareIntensity * (1 - fadeMask);
                 specularMask = smoothstep(_GlareEdgeLow, _GlareEdgeHigh, specularMask);
                 specularMask *= specularBrightness * cloudShadow;
+                float3 specularColor = GetMainLightChromaticity();
 
                 float depthMask = 1 - saturate(waterDepth);
                 surfaceColor = lerp(surfaceColor, sceneColor, windowMask * (1 - isFrontFace));
@@ -239,7 +247,7 @@ Shader "Oceana/WaterSurface" {
                 float reflectionMask = saturate(pow(frensel, _SkyReflectionFresnelPower) * _SkyReflectionStrength * reflectionNightStrength) * isFrontFace;
                 surfaceColor = lerp(surfaceColor, reflectionColor, reflectionMask);
                 surfaceColor = lerp(surfaceColor, float3(1, 1, 1), (1 - invFoamMask) * foamColor * foamBrightness);
-                surfaceColor = saturate(lerp(surfaceColor, waterFadeColor, fadeMask) + specularMask * isFrontFace);
+                surfaceColor = saturate(lerp(surfaceColor, waterFadeColor, fadeMask) + specularColor * specularMask * isFrontFace);
 
                 return float4(surfaceColor, 1);
             }

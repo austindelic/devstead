@@ -1596,8 +1596,14 @@ public class VolumetricCloudsURP : ScriptableRendererFeature
     #endif
         public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
         {
+            if (cloudsVolume == null || cloudsMaterial == null)
+                return;
+
             CameraData cameraData = renderingData.cameraData;
             Camera camera = cameraData.camera;
+            if (camera == null)
+                return;
+
             LightData lightData = renderingData.lightData;
 
             bool isStereoEnabled = camera.stereoEnabled;
@@ -1657,7 +1663,8 @@ public class VolumetricCloudsURP : ScriptableRendererFeature
             #if URP_PBSKY
                 bool isVolumeActive = visualEnvVolume != null && visualEnvVolume.IsActive();
 
-                float4 planetCenterRad = visualEnvVolume.GetPlanetCenterRadius(camera.transform.position);
+                float fallbackEarthRad = Mathf.Lerp(1.0f, 0.025f, cloudsVolume.earthCurvature.value) * VolumetricCloudsPass.earthRad;
+                float4 planetCenterRad = isVolumeActive ? visualEnvVolume.GetPlanetCenterRadius(camera.transform.position) : float4(0.0f, -fallbackEarthRad, 0.0f, fallbackEarthRad);
                 float actualEarthRad = isVolumeActive ? planetCenterRad.w : Mathf.Lerp(1.0f, 0.025f, cloudsVolume.earthCurvature.value) * VolumetricCloudsPass.earthRad;
                 float3 planetCenterPos = isVolumeActive ? planetCenterRad.xyz : float3(0.0f, -actualEarthRad, 0.0f);
             #else
@@ -1689,8 +1696,11 @@ public class VolumetricCloudsURP : ScriptableRendererFeature
                 // Apply light cookie settings
                 targetLight.cookie = null;
                 UniversalAdditionalLightData additonal = targetLight.GetComponent<UniversalAdditionalLightData>();
-                additonal.lightCookieSize = Vector2.one;
-                additonal.lightCookieOffset = Vector2.zero;
+                if (additonal != null)
+                {
+                    additonal.lightCookieSize = Vector2.one;
+                    additonal.lightCookieOffset = Vector2.zero;
+                }
 
                 Vector2 uvScale = 1 / regionSize;
                 float minHalfValue = Unity.Mathematics.half.MinValue;
@@ -1790,6 +1800,9 @@ public class VolumetricCloudsURP : ScriptableRendererFeature
         // Each ScriptableRenderPass can use the RenderGraph handle to add multiple render passes to the render graph
         public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
         {
+            if (cloudsVolume == null || cloudsMaterial == null)
+                return;
+
             UniversalLightData lightData = frameData.Get<UniversalLightData>();
             UniversalRenderingData universalRenderingData = frameData.Get<UniversalRenderingData>();
             UniversalResourceData resourceData = frameData.Get<UniversalResourceData>();
@@ -1812,6 +1825,8 @@ public class VolumetricCloudsURP : ScriptableRendererFeature
             }
 
             var camera = cameraData.camera;
+            if (camera == null)
+                return;
 
             // add an unsafe render pass to the render graph, specifying the name and the data type that will be passed to the ExecutePass function
             using (var builder = renderGraph.AddUnsafePass<PassData>(profilerTag, out var passData))
@@ -1852,7 +1867,8 @@ public class VolumetricCloudsURP : ScriptableRendererFeature
             #if URP_PBSKY
                 bool isVolumeActive = visualEnvVolume != null && visualEnvVolume.IsActive();
 
-                float4 planetCenterRad = visualEnvVolume.GetPlanetCenterRadius(camera.transform.position);
+                float fallbackEarthRad = Mathf.Lerp(1.0f, 0.025f, cloudsVolume.earthCurvature.value) * VolumetricCloudsPass.earthRad;
+                float4 planetCenterRad = isVolumeActive ? visualEnvVolume.GetPlanetCenterRadius(camera.transform.position) : float4(0.0f, -fallbackEarthRad, 0.0f, fallbackEarthRad);
                 float actualEarthRad = isVolumeActive ? planetCenterRad.w : Mathf.Lerp(1.0f, 0.025f, cloudsVolume.earthCurvature.value) * VolumetricCloudsPass.earthRad;
                 float3 planetCenterPos = isVolumeActive ? planetCenterRad.xyz : float3(0.0f, -actualEarthRad, 0.0f);
             #else
@@ -1901,8 +1917,11 @@ public class VolumetricCloudsURP : ScriptableRendererFeature
                 // Apply light cookie settings
                 targetLight.cookie = null;
                 UniversalAdditionalLightData additonal = targetLight.GetComponent<UniversalAdditionalLightData>();
-                additonal.lightCookieSize = Vector2.one;
-                additonal.lightCookieOffset = Vector2.zero;
+                if (additonal != null)
+                {
+                    additonal.lightCookieSize = Vector2.one;
+                    additonal.lightCookieOffset = Vector2.zero;
+                }
 
                 // Apply shadow cookie
                 Vector2 uvScale = 1 / regionSize;

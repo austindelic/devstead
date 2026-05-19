@@ -25,6 +25,7 @@ namespace Devstead.Editor.Rendering
                 var cloudsFeature = GetOrCreateRendererFeature<VolumetricCloudsURP>(rendererData, "VolumetricCloudsURP", ref changed);
                 var oceanaFeature = GetOrCreateRendererFeature<OceanaRenderFeature>(rendererData, "Oceana", ref changed);
                 changed |= ConfigureRendererData(rendererData);
+                changed |= ConfigureScreenSpaceGlobalIlluminationFeature(rendererData, isMobileRenderer);
                 changed |= ConfigureScreenSpaceReflectionFeature(rendererData, isMobileRenderer);
                 changed |= ConfigureRendererFeature(skyFeature, isMobileRenderer);
                 changed |= ConfigureRendererFeature(cloudsFeature, isMobileRenderer);
@@ -75,6 +76,70 @@ namespace Devstead.Editor.Rendering
             changed = true;
 
             return feature;
+        }
+
+        private static bool ConfigureScreenSpaceGlobalIlluminationFeature(UniversalRendererData rendererData, bool isMobileRenderer)
+        {
+            if (isMobileRenderer)
+            {
+                return false;
+            }
+
+            var featureType = System.Type.GetType("ScreenSpaceGlobalIlluminationURP, SSGIURP");
+            if (featureType == null)
+            {
+                Debug.LogWarning("Sky and Clouds setup could not find ScreenSpaceGlobalIlluminationURP. Import UnitySSGIURP and re-run setup.");
+                return false;
+            }
+
+            var changed = false;
+            var feature = rendererData.rendererFeatures
+                .FirstOrDefault(rendererFeature => rendererFeature != null && rendererFeature.GetType() == featureType);
+
+            if (feature == null)
+            {
+                feature = (ScriptableRendererFeature)ScriptableObject.CreateInstance(featureType);
+                feature.name = "ScreenSpaceGlobalIlluminationURP";
+                AssetDatabase.AddObjectToAsset(feature, rendererData);
+
+                var rendererObject = new SerializedObject(rendererData);
+                var featuresProperty = rendererObject.FindProperty("m_RendererFeatures");
+                var featureMapProperty = rendererObject.FindProperty("m_RendererFeatureMap");
+
+                featuresProperty.arraySize++;
+                featuresProperty.GetArrayElementAtIndex(featuresProperty.arraySize - 1).objectReferenceValue = feature;
+
+                AssetDatabase.TryGetGUIDAndLocalFileIdentifier(feature, out _, out long localId);
+                featureMapProperty.arraySize++;
+                featureMapProperty.GetArrayElementAtIndex(featureMapProperty.arraySize - 1).longValue = localId;
+
+                rendererObject.ApplyModifiedPropertiesWithoutUndo();
+                changed = true;
+            }
+
+            var featureObject = new SerializedObject(feature);
+
+            changed |= SetObjectReference(featureObject, "m_Shader", LoadScreenSpaceGlobalIlluminationShader());
+            changed |= SetBool(featureObject, "m_RenderingDebugger", false);
+            changed |= SetBool(featureObject, "m_ReflectionProbes", false);
+            changed |= SetBool(featureObject, "m_HighQualityUpscaling", false);
+            changed |= SetBool(featureObject, "m_OverrideAmbientLighting", true);
+            changed |= SetBool(featureObject, "m_BackfaceLighting", false);
+
+            if (!feature.isActive)
+            {
+                feature.SetActive(true);
+                EditorUtility.SetDirty(feature);
+                changed = true;
+            }
+
+            if (changed)
+            {
+                featureObject.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(feature);
+            }
+
+            return changed;
         }
 
         private static bool ConfigureScreenSpaceReflectionFeature(UniversalRendererData rendererData, bool isMobileRenderer)

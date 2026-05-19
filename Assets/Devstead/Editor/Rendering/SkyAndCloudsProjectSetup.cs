@@ -28,11 +28,14 @@ namespace Devstead.Editor.Rendering
         private const string FallbackSkyMaterialGuid = "7c6697a3d51c9324c8e9ad3284a1ac04";
         private const string CloudsMaterialGuid = "3748131af20412e478461c6445c73923";
         private const string ScreenSpaceReflectionMaterialGuid = "3023044652f9eb940b765b89a445c572";
+        private const string ScreenSpaceGlobalIlluminationShaderGuid = "052b080a79c052c4993acc96081d70b1";
 
         private const float DesktopCloudResolutionScale = 0.6f;
         private const float MobileCloudResolutionScale = 0.5f;
         private const float MainSunIntensity = 3.030782f;
+        private const float MainSunColorTemperature = 4300.0f;
         private const float MoonIntensity = 0.15f;
+        private const float MoonColorTemperature = 7000.0f;
         private const float SunRotationSpeedDegreesPerSecond = 10.0f;
         private const float MoonTimeOffset = 0.5f;
         private const float NightSkyFullSunAltitude = -0.12f;

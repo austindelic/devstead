@@ -129,6 +129,20 @@ namespace Devstead.Editor.Rendering
             return changed;
         }
 
+        private static bool SetVolumeParameter(SerializedObject serializedObject, string propertyName, bool value, bool overrideState)
+        {
+            var property = serializedObject.FindProperty(propertyName);
+            if (property == null)
+            {
+                return false;
+            }
+
+            var changed = false;
+            changed |= SetSerializedBool(property.FindPropertyRelative("m_OverrideState"), overrideState);
+            changed |= SetSerializedBool(property.FindPropertyRelative("m_Value"), value);
+            return changed;
+        }
+
         private static bool SetVolumeParameter(SerializedObject serializedObject, string propertyName, float value, bool overrideState)
         {
             var property = serializedObject.FindProperty(propertyName);
