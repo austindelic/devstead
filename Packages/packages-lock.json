@@ -1,5 +1,13 @@
 {
   "dependencies": {
+    "com.jiaozi158.unity-physically-based-sky-urp": {
+      "version": "file:com.jiaozi158.unity-physically-based-sky-urp",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {
+        "com.unity.render-pipelines.universal": "14.0.7"
+      }
+    },
     "com.unity.ai.navigation": {
       "version": "2.0.12",
       "depth": 0,
