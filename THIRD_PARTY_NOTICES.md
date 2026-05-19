@@ -19,11 +19,11 @@ This project uses the package's Milky Way panorama texture as a fallback night s
 
 This project uses ESO's fullsize original TIFF as the primary night sky cubemap. The original Milky Way image attribution and license requirements apply when this project is distributed.
 
-## Uber Stylized Water
+## Oceana-URP
 
-- Package: Uber Stylized Water
-- Package source: https://github.com/MatrixRex/Uber-Stylized-Water
-- Package license: MIT License
-- Imported version: release/v1.1.1
+- Package: Oceana-URP
+- Package source: https://github.com/ZloyKorovanovich/Oceana-URP
+- Package license: Apache License 2.0
+- Imported commit: 5ac8adcb25dd28700cfc1f29221a18dc7f344bd9
 
-This project uses the package shader, clear water material, water textures, shader subgraphs, and required helper includes for the ocean surface.
+This project uses a minimal runtime subset of the package for ocean rendering through URP render features.

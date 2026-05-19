@@ -1,4 +1,0 @@
-v1.1.1
-Checkout the full guide here.
-
-https://matrixrex.github.io/Uber-Stylized-Water/#/README

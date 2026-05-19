@@ -7,6 +7,7 @@ using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
 using Devstead.Rendering;
+using Oceana;
 
 namespace Devstead.Editor.Rendering
 {
@@ -17,7 +18,7 @@ namespace Devstead.Editor.Rendering
         private const string MainScenePath = "Assets/Devstead/Scenes/MainScene.unity";
         private const string VolumeProfilePath = "Assets/Devstead/Rendering/Profiles/MainSceneProfile.asset";
         private const string MoonTexturePath = "Assets/Devstead/Rendering/Textures/MoonAlbedo.jpg";
-        private const string WaterMaterialPath = "Assets/Shaders/Uber Stylized Water/Template Materials/UWa-Template-Clear.mat";
+        private const string OceanaSettingsPath = "Assets/ThirdParty/Oceana/Settings/OceanaSettings.asset";
         private const string MilkyWayHighQualityCubemapPath = "Assets/Devstead/Rendering/Textures/MilkyWayHighQuality.tif";
         private const string MilkyWayMediumCubemapPath = "Packages/dev.dyrda.milky-way-skybox/Runtime/Textures/eso0932a_mediumQuality.jpg";
         private const string MilkyWayPackagePathFragment = "dev.dyrda.milky-way-skybox";
@@ -41,11 +42,7 @@ namespace Devstead.Editor.Rendering
         private const float SpaceEmissionContrast = 1.8f;
         private const float SpaceEmissionSaturation = 0.65f;
         private const float SpaceEmissionTwinkleStrength = 0.06f;
-        private const float OceanWaterLevel = 0.0f;
-        private const float OceanScale = 5000.0f;
-        private const float OceanSupportScale = OceanScale * 10.0f;
-        private const float OceanViewDistance = 5000.0f;
-        private const float OceanFollowGridSize = 50.0f;
+        private const float MainCameraFarClipPlane = 5000.0f;
 
         [MenuItem(MenuPath)]
         public static void ApplyFromMenu()
@@ -64,6 +61,7 @@ namespace Devstead.Editor.Rendering
 
             changedAssets |= ConfigureRendererAssets();
             changedAssets |= ConfigureVolumeProfile();
+            changedAssets |= ConfigureRenderPipelineAssets();
             changedAssets |= ConfigureMainScene();
 
             if (changedAssets)
@@ -85,9 +83,12 @@ namespace Devstead.Editor.Rendering
                 var isMobileRenderer = rendererData.name.IndexOf("Mobile", System.StringComparison.OrdinalIgnoreCase) >= 0;
                 var skyFeature = GetOrCreateRendererFeature<PhysicallyBasedSkyURP>(rendererData, "Physically Based Sky URP", ref changed);
                 var cloudsFeature = GetOrCreateRendererFeature<VolumetricCloudsURP>(rendererData, "VolumetricCloudsURP", ref changed);
+                var oceanaFeature = GetOrCreateRendererFeature<OceanaRenderFeature>(rendererData, "Oceana", ref changed);
 
+                changed |= ConfigureRendererData(rendererData);
                 changed |= ConfigureRendererFeature(skyFeature, isMobileRenderer);
                 changed |= ConfigureRendererFeature(cloudsFeature, isMobileRenderer);
+                changed |= ConfigureRendererFeature(oceanaFeature);
                 changed |= SynchronizeRendererFeatureMap(rendererData);
             }
 
@@ -200,6 +201,45 @@ namespace Devstead.Editor.Rendering
             {
                 featureObject.ApplyModifiedPropertiesWithoutUndo();
                 EditorUtility.SetDirty(feature);
+            }
+
+            return changed;
+        }
+
+        private static bool ConfigureRendererFeature(OceanaRenderFeature feature)
+        {
+            var changed = false;
+            var featureObject = new SerializedObject(feature);
+
+            changed |= SetObjectReference(featureObject, "m_Settings", LoadOceanaSettings());
+
+            if (!feature.isActive)
+            {
+                feature.SetActive(true);
+                EditorUtility.SetDirty(feature);
+                changed = true;
+            }
+
+            if (changed)
+            {
+                featureObject.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(feature);
+            }
+
+            return changed;
+        }
+
+        private static bool ConfigureRendererData(UniversalRendererData rendererData)
+        {
+            var changed = false;
+            var rendererObject = new SerializedObject(rendererData);
+
+            changed |= SetEnum(rendererObject, "m_RenderingMode", 2);
+
+            if (changed)
+            {
+                rendererObject.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(rendererData);
             }
 
             return changed;
@@ -318,8 +358,10 @@ namespace Devstead.Editor.Rendering
             changed |= SetParameter(volumetricClouds.bottomAltitude, 1200.0f, true);
             changed |= SetParameter(volumetricClouds.altitudeRange, 3200.0f, true);
             changed |= SetParameter(volumetricClouds.altitudeDistortion, 0.0f, true);
-            changed |= SetParameter(volumetricClouds.shadows, false, true);
-            changed |= SetParameter(volumetricClouds.shadowOpacity, 0.75f, true);
+            changed |= SetParameter(volumetricClouds.shadows, true, true);
+            changed |= SetParameter(volumetricClouds.shadowResolution, VolumetricClouds.CloudShadowResolution.High512, true);
+            changed |= SetParameter(volumetricClouds.shadowDistance, 8000.0f, true);
+            changed |= SetParameter(volumetricClouds.shadowOpacity, 0.55f, true);
             changed |= SetParameter(volumetricClouds.perceptualBlending, 0.0f, true);
             changed |= SetParameter(volumetricClouds.numPrimarySteps, 32, true);
             changed |= SetParameter(volumetricClouds.numLightSteps, 1, true);
@@ -360,8 +402,6 @@ namespace Devstead.Editor.Rendering
             sceneChanged |= ConfigureMoonLight(sun);
             sceneChanged |= ConfigureSkyController(sun);
             sceneChanged |= ConfigurePlayerCamera();
-            sceneChanged |= ConfigureOcean();
-            sceneChanged |= ConfigureSceneColliders();
 
             if (sceneChanged)
             {
@@ -372,123 +412,41 @@ namespace Devstead.Editor.Rendering
             return sceneChanged;
         }
 
-        private static bool ConfigureSceneColliders()
+        private static bool ConfigureRenderPipelineAssets()
         {
             var changed = false;
-            var floor = GameObject.Find("Shadow Test Floor");
 
-            if (floor == null)
+            var pcRpAsset = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>("Assets/Settings/PC_RPAsset.asset");
+            if (pcRpAsset != null)
             {
-                return false;
+                changed |= ConfigureRenderPipelineAsset(pcRpAsset);
             }
 
-            changed |= SetTransform(floor.transform, new Vector3(0.0f, -0.05f, 0.0f), Quaternion.identity, new Vector3(OceanSupportScale, 0.1f, OceanSupportScale));
-
-            var renderer = floor.GetComponent<MeshRenderer>();
-            if (renderer != null && renderer.enabled)
+            var mobileRpAsset = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>("Assets/Settings/Mobile_RPAsset.asset");
+            if (mobileRpAsset != null)
             {
-                renderer.enabled = false;
-                EditorUtility.SetDirty(renderer);
-                changed = true;
-            }
-
-            if (floor.GetComponent<Collider>() == null)
-            {
-                floor.AddComponent<BoxCollider>();
-                EditorUtility.SetDirty(floor);
-                changed = true;
+                changed |= ConfigureRenderPipelineAsset(mobileRpAsset);
             }
 
             return changed;
         }
 
-        private static bool ConfigureOcean()
+        private static bool ConfigureRenderPipelineAsset(UniversalRenderPipelineAsset renderPipelineAsset)
         {
             var changed = false;
-            var oceanObject = GameObject.Find("Ocean");
+            var pipelineAssetObject = new SerializedObject(renderPipelineAsset);
 
-            if (oceanObject == null)
-            {
-                oceanObject = new GameObject("Ocean");
-                changed = true;
-            }
-
-            changed |= SetTransform(oceanObject.transform, Vector3.zero, Quaternion.identity, new Vector3(OceanScale, 1.0f, OceanScale));
-
-            var meshFilter = oceanObject.GetComponent<MeshFilter>();
-            if (meshFilter == null)
-            {
-                meshFilter = oceanObject.AddComponent<MeshFilter>();
-                changed = true;
-            }
-
-            var planeMesh = LoadBuiltinPlaneMesh();
-            if (planeMesh != null && meshFilter.sharedMesh != planeMesh)
-            {
-                meshFilter.sharedMesh = planeMesh;
-                EditorUtility.SetDirty(meshFilter);
-                changed = true;
-            }
-
-            var meshRenderer = oceanObject.GetComponent<MeshRenderer>();
-            if (meshRenderer == null)
-            {
-                meshRenderer = oceanObject.AddComponent<MeshRenderer>();
-                changed = true;
-            }
-
-            var waterMaterial = AssetDatabase.LoadAssetAtPath<Material>(WaterMaterialPath);
-            if (waterMaterial != null && meshRenderer.sharedMaterial != waterMaterial)
-            {
-                meshRenderer.sharedMaterial = waterMaterial;
-                changed = true;
-            }
-            else if (waterMaterial == null)
-            {
-                Debug.LogWarning($"Sky and Clouds setup could not find water material at {WaterMaterialPath}.");
-            }
-
-            if (meshRenderer.shadowCastingMode != ShadowCastingMode.Off)
-            {
-                meshRenderer.shadowCastingMode = ShadowCastingMode.Off;
-                changed = true;
-            }
-
-            if (meshRenderer.receiveShadows)
-            {
-                meshRenderer.receiveShadows = false;
-                changed = true;
-            }
-
-            var follower = oceanObject.GetComponent<InfiniteOceanFollower>();
-            if (follower == null)
-            {
-                follower = oceanObject.AddComponent<InfiniteOceanFollower>();
-                changed = true;
-            }
-
-            var followerObject = new SerializedObject(follower);
-            changed |= SetObjectReference(followerObject, "target", Camera.main == null ? null : Camera.main.transform);
-            changed |= SetFloat(followerObject, "waterLevel", OceanWaterLevel);
-            changed |= SetFloat(followerObject, "followGridSize", OceanFollowGridSize);
+            changed |= SetBool(pipelineAssetObject, "m_RequireDepthTexture", true);
+            changed |= SetBool(pipelineAssetObject, "m_RequireOpaqueTexture", true);
+            changed |= SetBool(pipelineAssetObject, "m_SupportsLightCookies", true);
 
             if (changed)
             {
-                followerObject.ApplyModifiedPropertiesWithoutUndo();
-                EditorUtility.SetDirty(oceanObject);
-                EditorUtility.SetDirty(meshRenderer);
-                EditorUtility.SetDirty(follower);
+                pipelineAssetObject.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(renderPipelineAsset);
             }
 
             return changed;
-        }
-
-        private static Mesh LoadBuiltinPlaneMesh()
-        {
-            var temporaryPlane = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            var mesh = temporaryPlane.GetComponent<MeshFilter>().sharedMesh;
-            Object.DestroyImmediate(temporaryPlane);
-            return mesh;
         }
 
         private static bool ConfigurePlayerCamera()
@@ -510,9 +468,9 @@ namespace Devstead.Editor.Rendering
             changed |= SetObjectName(camera.gameObject, "Main Camera");
             changed |= SetTransform(cameraTransform, new Vector3(0.0f, 1.8f, -4.0f), Quaternion.Euler(10.0f, 0.0f, 0.0f), Vector3.one);
 
-            if (!Mathf.Approximately(camera.farClipPlane, OceanViewDistance))
+            if (!Mathf.Approximately(camera.farClipPlane, MainCameraFarClipPlane))
             {
-                camera.farClipPlane = OceanViewDistance;
+                camera.farClipPlane = MainCameraFarClipPlane;
                 changed = true;
             }
 
@@ -715,10 +673,17 @@ namespace Devstead.Editor.Rendering
             var volume = Object.FindObjectsByType<Volume>(FindObjectsInactive.Include)
                 .FirstOrDefault(sceneVolume => sceneVolume.name == "Global Volume");
             var controller = skyObject.GetComponent<SkyController>();
+            var planarReflection = skyObject.GetComponent<PlanarReflectionRenderer>();
 
             if (controller == null)
             {
                 controller = skyObject.AddComponent<SkyController>();
+                changed = true;
+            }
+
+            if (planarReflection == null)
+            {
+                planarReflection = skyObject.AddComponent<PlanarReflectionRenderer>();
                 changed = true;
             }
 
@@ -746,6 +711,28 @@ namespace Devstead.Editor.Rendering
                 controller.ApplySky();
                 EditorUtility.SetDirty(skyObject);
                 EditorUtility.SetDirty(controller);
+            }
+
+            changed |= ConfigurePlanarReflectionRenderer(planarReflection);
+
+            return changed;
+        }
+
+        private static bool ConfigurePlanarReflectionRenderer(PlanarReflectionRenderer planarReflection)
+        {
+            var reflectionObject = new SerializedObject(planarReflection);
+            var changed = false;
+
+            changed |= SetFloat(reflectionObject, "seaLevel", 0.0f);
+            changed |= SetFloat(reflectionObject, "resolutionScale", 0.5f);
+            changed |= SetInt(reflectionObject, "maxTextureSize", 1024);
+            changed |= SetFloat(reflectionObject, "clipPlaneOffset", 0.07f);
+            changed |= SetBool(reflectionObject, "renderSceneView", true);
+
+            if (changed)
+            {
+                reflectionObject.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(planarReflection);
             }
 
             return changed;
@@ -865,6 +852,18 @@ namespace Devstead.Editor.Rendering
             return AssetDatabase.LoadAssetAtPath<Texture2D>(MoonTexturePath);
         }
 
+        private static OceanaSettings LoadOceanaSettings()
+        {
+            var settings = AssetDatabase.LoadAssetAtPath<OceanaSettings>(OceanaSettingsPath);
+
+            if (settings == null)
+            {
+                Debug.LogWarning($"Sky and Clouds setup could not find Oceana settings at {OceanaSettingsPath}.");
+            }
+
+            return settings;
+        }
+
         private static Cubemap LoadMilkyWayCubemap()
         {
             var highQualityCubemap = AssetDatabase.LoadAssetAtPath<Cubemap>(MilkyWayHighQualityCubemapPath);
@@ -966,6 +965,18 @@ namespace Devstead.Editor.Rendering
             }
 
             property.floatValue = value;
+            return true;
+        }
+
+        private static bool SetInt(SerializedObject serializedObject, string propertyName, int value)
+        {
+            var property = serializedObject.FindProperty(propertyName);
+            if (property == null || property.intValue == value)
+            {
+                return false;
+            }
+
+            property.intValue = value;
             return true;
         }
 

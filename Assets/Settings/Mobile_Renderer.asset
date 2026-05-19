@@ -29,7 +29,8 @@ MonoBehaviour:
   m_RendererFeatures:
   - {fileID: 6129600530961482532}
   - {fileID: 6129600530961482534}
-  m_RendererFeatureMap: 244301f734b71055264301f734b71055
+  - {fileID: 6129600530961482536}
+  m_RendererFeatureMap: 244301f734b71055264301f734b71055284301f734b71055
   m_UseNativeRenderPass: 1
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
   m_AssetVersion: 2
@@ -47,7 +48,7 @@ MonoBehaviour:
     failOperation: 0
     zFailOperation: 0
   m_ShadowTransparentReceive: 0
-  m_RenderingMode: 0
+  m_RenderingMode: 2
   m_DepthPrimingMode: 0
   m_CopyDepthMode: 0
   m_AccurateGbufferNormals: 0
@@ -63,7 +64,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3c1c34126d0c3824cb7e942eb35d4fa6, type: 3}
   m_Name: Physically Based Sky URP
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier:
   m_Active: 1
   m_Shader: {fileID: 4800000, guid: cba92fa286f80234db50615beb33eab2, type: 3}
   m_LutShader: {fileID: 4800000, guid: b2d9c6e519415af43a8d8e54c3ca5a4d, type: 3}
@@ -100,3 +101,17 @@ MonoBehaviour:
   resetOnStart: 1
   outputDepth: 0
   depthTexture: 0
+--- !u!114 &6129600530961482536
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 68017217a8404634aa1a51d6a870099f, type: 3}
+  m_Name: Oceana
+  m_EditorClassIdentifier:
+  m_Active: 1
+  m_Settings: {fileID: 11400000, guid: a17973ebcf8713d4f91e970c37631e5b, type: 2}

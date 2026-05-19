@@ -30,6 +30,8 @@ namespace Devstead.Rendering
         [SerializeField] private float nightSkyHiddenSunAltitude = -0.02f;
         [SerializeField] private float nightSkyEmissionMultiplier = 0.45f;
 
+        private static readonly int DevsteadNightWaterFactor = Shader.PropertyToID("_DevsteadNightWaterFactor");
+
         public Light Sun => sun;
         public Light Moon => moon;
         public Volume SkyVolume => skyVolume;
@@ -56,6 +58,11 @@ namespace Devstead.Rendering
         private void OnEnable()
         {
             ApplySky();
+        }
+
+        private void OnDisable()
+        {
+            Shader.SetGlobalFloat(DevsteadNightWaterFactor, 0.0f);
         }
 
         private void OnValidate()
@@ -85,7 +92,9 @@ namespace Devstead.Rendering
                 RenderSettings.sun = sun;
             }
 
-            ApplyNightSkyEmission();
+            var nightFade = CalculateNightFade();
+            Shader.SetGlobalFloat(DevsteadNightWaterFactor, nightFade);
+            ApplyNightSkyEmission(nightFade);
         }
 
         private static void ApplyDayArc(Light light, Vector3 baseEulerAngles, float normalizedOrbit)
@@ -100,9 +109,22 @@ namespace Devstead.Rendering
             light.transform.rotation = Quaternion.Euler(eulerAngles);
         }
 
-        private void ApplyNightSkyEmission()
+        private float CalculateNightFade()
         {
-            if (skyVolume == null || sun == null || skyVolume.profile == null)
+            if (sun == null)
+            {
+                return 0.0f;
+            }
+
+            var sunDirection = -sun.transform.forward;
+            var sunAltitude = Vector3.Dot(sunDirection.normalized, Vector3.up);
+            var fade = Mathf.InverseLerp(nightSkyHiddenSunAltitude, nightSkyFullSunAltitude, sunAltitude);
+            return Mathf.SmoothStep(0.0f, 1.0f, Mathf.Clamp01(fade));
+        }
+
+        private void ApplyNightSkyEmission(float nightFade)
+        {
+            if (skyVolume == null || skyVolume.profile == null)
             {
                 return;
             }
@@ -112,13 +134,8 @@ namespace Devstead.Rendering
                 return;
             }
 
-            var sunDirection = -sun.transform.forward;
-            var sunAltitude = Vector3.Dot(sunDirection.normalized, Vector3.up);
-            var fade = Mathf.InverseLerp(nightSkyHiddenSunAltitude, nightSkyFullSunAltitude, sunAltitude);
-            fade = Mathf.SmoothStep(0.0f, 1.0f, Mathf.Clamp01(fade));
-
             physicallyBasedSky.spaceEmissionMultiplier.overrideState = true;
-            physicallyBasedSky.spaceEmissionMultiplier.value = nightSkyEmissionMultiplier * fade;
+            physicallyBasedSky.spaceEmissionMultiplier.value = nightSkyEmissionMultiplier * nightFade;
         }
     }
 }

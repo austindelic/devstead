@@ -37,7 +37,8 @@ MonoBehaviour:
   - {fileID: 7833122117494664109}
   - {fileID: 6129600530961482531}
   - {fileID: 6129600530961482533}
-  m_RendererFeatureMap: ad6b866f10d7b46c234301f734b71055254301f734b71055
+  - {fileID: 6129600530961482535}
+  m_RendererFeatureMap: ad6b866f10d7b46c234301f734b71055254301f734b71055274301f734b71055
   m_UseNativeRenderPass: 1
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
   m_AssetVersion: 2
@@ -71,7 +72,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f62c9c65cf3354c93be831c8bc075510, type: 3}
   m_Name: ScreenSpaceAmbientOcclusion
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier:
   m_Active: 1
   m_Settings:
     AOMethod: 0
@@ -143,3 +144,17 @@ MonoBehaviour:
   resetOnStart: 1
   outputDepth: 0
   depthTexture: 0
+--- !u!114 &6129600530961482535
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 68017217a8404634aa1a51d6a870099f, type: 3}
+  m_Name: Oceana
+  m_EditorClassIdentifier:
+  m_Active: 1
+  m_Settings: {fileID: 11400000, guid: a17973ebcf8713d4f91e970c37631e5b, type: 2}
