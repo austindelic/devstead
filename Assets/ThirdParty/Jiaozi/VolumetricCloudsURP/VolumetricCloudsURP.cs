@@ -235,10 +235,11 @@ public class VolumetricCloudsURP : ScriptableRendererFeature
             return;
         }
 
-        // Store the current enable state of volumetric clouds in a global shader keyword
-        bool isDebugger = DebugManager.instance.isAnyDebugUIActive;
-        var stack = VolumeManager.instance.stack;
-        VolumetricClouds cloudsVolume = stack.GetComponent<VolumetricClouds>();
+        // Renderer assets can be constructed before Unity has initialized a Volume stack.
+        // Treat clouds as inactive for that pass instead of failing renderer creation.
+        bool isDebugger = DebugManager.instance != null && DebugManager.instance.isAnyDebugUIActive;
+        var stack = VolumeManager.instance == null ? null : VolumeManager.instance.stack;
+        VolumetricClouds cloudsVolume = stack == null ? null : stack.GetComponent<VolumetricClouds>();
         bool isVolumeActive = cloudsVolume != null && cloudsVolume.IsActive() && (!isDebugger || renderingDebugger);
 
         if (!isActive || !isVolumeActive)
@@ -300,10 +301,10 @@ public class VolumetricCloudsURP : ScriptableRendererFeature
             return;
     #endif
 
-        var stack = VolumeManager.instance.stack;
-        VolumetricClouds cloudsVolume = stack.GetComponent<VolumetricClouds>();
-        ColorAdjustments colorAdjustments = stack.GetComponent<ColorAdjustments>();
-        bool isDebugger = DebugManager.instance.isAnyDebugUIActive;
+        var stack = VolumeManager.instance == null ? null : VolumeManager.instance.stack;
+        VolumetricClouds cloudsVolume = stack == null ? null : stack.GetComponent<VolumetricClouds>();
+        ColorAdjustments colorAdjustments = stack == null ? null : stack.GetComponent<ColorAdjustments>();
+        bool isDebugger = DebugManager.instance != null && DebugManager.instance.isAnyDebugUIActive;
         bool isVolumeActive = cloudsVolume != null && cloudsVolume.IsActive() && (!isDebugger || renderingDebugger);
 
         bool isProbeCamera = renderingData.cameraData.cameraType == CameraType.Reflection && reflectionProbe;

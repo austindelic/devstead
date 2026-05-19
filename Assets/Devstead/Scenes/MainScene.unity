@@ -507,7 +507,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 410087039}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.6830127, y: -0.18301271, z: -0.18301271, w: 0.6830127}
+  m_LocalRotation: {x: 0.6830127, y: -0.18301271, z: 0.18301271, w: 0.6830127}
   m_LocalPosition: {x: 0, y: 3, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -634,7 +634,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 410087044}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.17658027, y: 0.70620346, z: -0.6590064, w: 0.18922667}
+  m_LocalRotation: {x: 0.18922672, y: -0.6590062, z: -0.70620364, w: -0.17658019}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -729,7 +729,6 @@ GameObject:
   m_Component:
   - component: {fileID: 900000001}
   - component: {fileID: 900000002}
-  - component: {fileID: 900000003}
   m_Layer: 0
   m_Name: Sky
   m_TagString: Untagged
@@ -770,7 +769,7 @@ MonoBehaviour:
   sun: {fileID: 410087040}
   moon: {fileID: 410087045}
   skyVolume: {fileID: 832575518}
-  timeOfDay: 0
+  timeOfDay: 0.5
   moonTimeOffset: 0.489
   animateInPlayMode: 1
   sunDegreesPerSecond: 10
@@ -779,23 +778,6 @@ MonoBehaviour:
   nightSkyFullSunAltitude: -0.12
   nightSkyHiddenSunAltitude: -0.02
   nightSkyEmissionMultiplier: 0.45
---- !u!114 &900000003
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 900000000}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0f43e2ed958d4bb48bc80cc76bd36d0d, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
-  seaLevel: 0
-  resolutionScale: 0.5
-  maxTextureSize: 1024
-  clipPlaneOffset: 0.07
-  renderSceneView: 1
 --- !u!1 &1200000011
 GameObject:
   m_ObjectHideFlags: 0

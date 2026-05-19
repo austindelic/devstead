@@ -8,9 +8,7 @@ Shader "Oceana/WaterSurface" {
         _NightSpecularBrightness ("Night Specular Brightness", range(0, 1)) = 0.08
         _SkyReflectionStrength ("Sky Reflection Strength", range(0, 1)) = 0.85
         _SkyReflectionFresnelPower ("Sky Reflection Fresnel Power", float) = 0.55
-        _PlanarReflectionStrength ("Planar Reflection Strength", range(0, 1)) = 0.85
-        _PlanarReflectionDistortion ("Planar Reflection Distortion", range(0, 0.1)) = 0.018
-        _PlanarReflectionBrightness ("Planar Reflection Brightness", float) = 1.35
+        _PlanarReflectionBrightness ("Reflection Brightness", float) = 1.35
         _SkyReflectionFallbackStrength ("Sky Reflection Fallback Strength", range(0, 1)) = 0.75
         _SkyReflectionMip ("Sky Reflection Blur", range(0, 7)) = 0.4
         _NightReflectionStrength ("Night Reflection Strength", range(0, 1)) = 0.35
@@ -52,8 +50,6 @@ Shader "Oceana/WaterSurface" {
             uniform float _NightSpecularBrightness;
             uniform float _SkyReflectionStrength;
             uniform float _SkyReflectionFresnelPower;
-            uniform float _PlanarReflectionStrength;
-            uniform float _PlanarReflectionDistortion;
             uniform float _PlanarReflectionBrightness;
             uniform float _SkyReflectionFallbackStrength;
             uniform float _SkyReflectionMip;
@@ -71,7 +67,7 @@ Shader "Oceana/WaterSurface" {
 
             uniform float _WindowEdgeLow;
             uniform float _WindowEdgeHigh;
- 
+
             uniform float _DisplaceEdgeClose;
             uniform float _DisplaceEdgeFar;
 
@@ -100,8 +96,6 @@ Shader "Oceana/WaterSurface" {
             uniform float3 _WorldSpaceCameraPos;
             uniform float4 _MainLightPosition;
             uniform float _DevsteadNightWaterFactor;
-            uniform float _DevsteadPlanarReflectionEnabled;
-            uniform float4x4 _DevsteadPlanarReflectionVP;
             uniform float4x4 _MainLightWorldToLight;
             uniform float _MainLightCookieTextureFormat;
 
@@ -116,30 +110,16 @@ Shader "Oceana/WaterSurface" {
             uniform Texture2D _SourceDepth;
 
             uniform Texture2D _FoamMask;
-            uniform Texture2D _DevsteadPlanarReflectionTexture;
             uniform Texture2D _MainLightCookieTexture;
             uniform TextureCube _GlossyEnvironmentCubeMap;
         }
-        
+
         #include "include/ScreenSpaceFunctions.hlsl"
         #include "include/MapPacking.hlsl"
 
         float SpecularBRF(float3 viewDir, float3 normal, float3 lightDir) {
             float3 halfVector = normalize(viewDir + lightDir);
             return saturate(dot(halfVector, normal)) * saturate(sign(lightDir.y));
-        }
-
-        float GetPlanarReflectionMask(float4 planarPositionCS) {
-            float2 uv = planarPositionCS.xy / max(planarPositionCS.w, 0.0001) * 0.5 + 0.5;
-            float2 uvMask = step(0.0, uv) * step(uv, 1.0);
-            return uvMask.x * uvMask.y * step(0.0001, planarPositionCS.w) * saturate(_DevsteadPlanarReflectionEnabled);
-        }
-
-        float3 SamplePlanarReflection(float3 positionWS, float3 normal) {
-            float4 planarPositionCS = mul(_DevsteadPlanarReflectionVP, float4(positionWS, 1.0));
-            float2 planarUV = planarPositionCS.xy / max(planarPositionCS.w, 0.0001) * 0.5 + 0.5;
-            planarUV += normal.xz * _PlanarReflectionDistortion;
-            return _DevsteadPlanarReflectionTexture.SampleLevel(_bilinearRepeatSampler, saturate(planarUV), 0).rgb * _PlanarReflectionBrightness;
         }
 
         float3 SampleSkyReflection(float3 viewDir, float3 normal) {
@@ -242,11 +222,8 @@ Shader "Oceana/WaterSurface" {
                 float specularBrightness = lerp(1.0, _NightSpecularBrightness, nightWaterFactor);
                 float reflectionNightStrength = lerp(1.0, _NightReflectionStrength, nightWaterFactor);
 
-                float4 planarPositionCS = mul(_DevsteadPlanarReflectionVP, float4(input.positionWS.xyz, 1.0));
-                float planarMask = GetPlanarReflectionMask(planarPositionCS) * _PlanarReflectionStrength;
-                float3 planarReflection = SamplePlanarReflection(input.positionWS.xyz, normal);
                 float3 skyReflection = SampleSkyReflection(viewDir, normal);
-                float3 reflectionColor = lerp(skyReflection * _SkyReflectionFallbackStrength, planarReflection, planarMask);
+                float3 reflectionColor = skyReflection * _SkyReflectionFallbackStrength;
                 reflectionColor *= reflectionNightStrength * cloudShadow;
                 waterColor = lerp(waterColor, waterColor * max(reflectionColor, 0.05) * 1.7, _SkyReflectionFallbackStrength * reflectionNightStrength);
                 waterFadeColor = lerp(waterFadeColor, reflectionColor, _SkyReflectionFallbackStrength * 0.75 * reflectionNightStrength);
