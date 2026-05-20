@@ -40,6 +40,8 @@ namespace Oceana {
             }
             else {
                 m_Settings = null;
+                m_Material = null;
+                m_Mesh = null;
             }
         }
 
@@ -59,14 +61,15 @@ namespace Oceana {
 
             public TextureHandle sourceColor;
             public TextureHandle sourceDepth;
-
-            public TextureHandle cameraColor;
-            public TextureHandle cameraDepth;
         }
 
         public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData) {
             UniversalResourceData resourceData = frameData.Get<UniversalResourceData>();
-            ScreenCopyPassData copyData = frameData.GetOrCreate<ScreenCopyPassData>();
+            OceanaScrollPass.ScrollGlobalData mapData = frameData.GetOrCreate<OceanaScrollPass.ScrollGlobalData>();
+
+            if (!CanRender(resourceData, mapData)) {
+                return;
+            }
 
             TextureDesc sceneColorDesc = renderGraph.GetTextureDesc(resourceData.activeColorTexture);
             sceneColorDesc.bindTextureMS = false;
@@ -77,7 +80,7 @@ namespace Oceana {
             sceneDepthDesc.colorFormat = GraphicsFormat.R32_SFloat;
             sceneDepthDesc.format = GraphicsFormat.R32_SFloat;
 
-            copyData = frameData.GetOrCreate<ScreenCopyPassData>();
+            ScreenCopyPassData copyData = frameData.GetOrCreate<ScreenCopyPassData>();
             copyData.sceneColor = renderGraph.CreateTexture(sceneColorDesc);
             copyData.sceneDepth = renderGraph.CreateTexture(sceneDepthDesc);
 
@@ -88,12 +91,9 @@ namespace Oceana {
 
             using (IRasterRenderGraphBuilder builder = renderGraph.AddRasterRenderPass(passName, out SurfacePassData passData)) {
                 UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
-                OceanaScrollPass.ScrollGlobalData mapData = frameData.Get<OceanaScrollPass.ScrollGlobalData>();
                 ScreenCopyPassData screenData = frameData.Get<ScreenCopyPassData>();
 
                 passData.scrollMap = mapData.scrollMap;
-                passData.cameraColor = resourceData.activeColorTexture;
-                passData.cameraDepth = resourceData.activeDepthTexture;
                 passData.sourceColor = screenData.sceneColor;
                 passData.sourceDepth = screenData.sceneDepth;
                 passData.cameraPosition = cameraData.worldSpaceCameraPos;
@@ -110,13 +110,13 @@ namespace Oceana {
         }
 
         private void Execute(SurfacePassData data, RasterGraphContext context) {
-            m_Material.SetFloat("_SeaLevel", m_SeaLevel);
-            m_Material.SetFloat("_DisplaceHeight", m_DisplaceHeight);
-            m_Material.SetVector("_ScrollMap_ST", m_ScrollST);
+            m_Material.SetFloat(OceanaShaderIds.SeaLevel, m_SeaLevel);
+            m_Material.SetFloat(OceanaShaderIds.DisplaceHeight, m_DisplaceHeight);
+            m_Material.SetVector(OceanaShaderIds.ScrollMapST, m_ScrollST);
 
-            m_Material.SetTexture("_ScrollMap", data.scrollMap);
-            m_Material.SetTexture("_SourceColor", data.sourceColor);
-            m_Material.SetTexture("_SourceDepth", data.sourceDepth);
+            m_Material.SetTexture(OceanaShaderIds.ScrollMap, data.scrollMap);
+            m_Material.SetTexture(OceanaShaderIds.SourceColor, data.sourceColor);
+            m_Material.SetTexture(OceanaShaderIds.SourceDepth, data.sourceDepth);
 
             var worldPosition = new Vector3(
                 SnapToGrid(data.cameraPosition.x, m_FollowGridSize),
@@ -126,7 +126,15 @@ namespace Oceana {
             context.cmd.DrawMesh(m_Mesh, Matrix4x4.TRS(worldPosition, Quaternion.identity, Vector3.one), m_Material);
         }
 
-        private float SnapToGrid(float value, float gridSize) {
+        private bool CanRender(UniversalResourceData resourceData, OceanaScrollPass.ScrollGlobalData mapData) {
+            return m_Material != null
+                && m_Mesh != null
+                && resourceData.activeColorTexture.IsValid()
+                && resourceData.activeDepthTexture.IsValid()
+                && mapData.scrollMap.IsValid();
+        }
+
+        private static float SnapToGrid(float value, float gridSize) {
             if (gridSize <= 0) {
                 return value;
             }

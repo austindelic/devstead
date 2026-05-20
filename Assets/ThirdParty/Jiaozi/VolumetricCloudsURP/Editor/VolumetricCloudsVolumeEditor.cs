@@ -211,13 +211,34 @@ class VolumetricCloudsEditor : VolumeComponentEditor
     public override void OnInspectorGUI()
     {
         var clouds = GetRendererFeature(k_VolumetricCloudsRendererFeature) as VolumetricCloudsURP;
+        if (!DrawRendererFeatureMessages(clouds))
+            return;
+
+        bool showDebuggerMessage = DebugManager.instance.isAnyDebugUIActive && !clouds.RenderingDebugger;
+        bool enableClouds = m_Enable.value.boolValue && m_Enable.overrideState.boolValue;
+
+        DrawRenderingDebuggerMessage(clouds, enableClouds, showDebuggerMessage);
+
+        PropertyField(m_Enable);
+
+        bool hasVisualEnvVolume = DrawLocalCloudsProperty();
+        CloudsShapeUI(hasVisualEnvVolume);
+        DrawWindProperties();
+        DrawLightingProperties();
+        DrawShadowProperties();
+        DrawQualityProperties();
+    }
+
+    bool DrawRendererFeatureMessages(VolumetricCloudsURP clouds)
+    {
         if (clouds == null)
         {
             EditorGUILayout.Space();
             EditorGUILayout.HelpBox(k_NoRendererFeatureMessage, MessageType.Error, wide: true);
-            return;
+            return false;
         }
-        else if (!clouds.isActive)
+
+        if (!clouds.isActive)
         {
             EditorGUILayout.Space();
             CoreEditorUtils.DrawFixMeBox(k_RendererFeatureOffMessage, MessageType.Warning, k_FixButtonName, () =>
@@ -230,28 +251,28 @@ class VolumetricCloudsEditor : VolumeComponentEditor
         else if (clouds.AmbientUpdateMode == VolumetricCloudsURP.CloudsAmbientMode.Dynamic && !Shader.IsKeywordEnabled(k_VISUAL_ENVIRONMENT_DYNAMIC_SKY))
         {
             if (RenderSettings.skybox != null && RenderSettings.skybox.GetPassName(0) == k_UniversalForward)
-            {
                 EditorGUILayout.HelpBox(k_CustomSkyShaderGraphMessage, MessageType.Info, wide: true);
-
-            }
         }
 
-        bool showDebuggerMessage = DebugManager.instance.isAnyDebugUIActive && !clouds.RenderingDebugger;
-        bool enableClouds = m_Enable.value.boolValue && m_Enable.overrideState.boolValue;
+        return true;
+    }
 
-        if (clouds.isActive && enableClouds && showDebuggerMessage)
+    void DrawRenderingDebuggerMessage(VolumetricCloudsURP clouds, bool enableClouds, bool showDebuggerMessage)
+    {
+        if (!clouds.isActive || !enableClouds || !showDebuggerMessage)
+            return;
+
+        EditorGUILayout.Space();
+        CoreEditorUtils.DrawFixMeBox(k_RenderingDebuggerMessage, MessageType.Warning, k_EnableButtonName, () =>
         {
-            EditorGUILayout.Space();
-            CoreEditorUtils.DrawFixMeBox(k_RenderingDebuggerMessage, MessageType.Warning, k_EnableButtonName, () =>
-            {
-                clouds.RenderingDebugger = true;
-                GUIUtility.ExitGUI();
-            });
-            EditorGUILayout.Space();
-        }
+            clouds.RenderingDebugger = true;
+            GUIUtility.ExitGUI();
+        });
+        EditorGUILayout.Space();
+    }
 
-        PropertyField(m_Enable);
-
+    bool DrawLocalCloudsProperty()
+    {
     #if URP_PBSKY
         var stack = VolumeManager.instance.stack;
         VisualEnvironment visualEnvVolume = stack.GetComponent<VisualEnvironment>();
@@ -262,21 +283,21 @@ class VolumetricCloudsEditor : VolumeComponentEditor
         {
             PropertyField(m_LocalClouds);
         }
+        return hasVisualEnvVolume;
     #else
-        bool hasVisualEnvVolume = false;
         PropertyField(m_LocalClouds);
+        return false;
     #endif
+    }
 
-        bool hasCloudMap = CloudsShapeUI(hasVisualEnvVolume);
-
-        //DrawHeader("Wind");
+    void DrawWindProperties()
+    {
         PropertyField(m_GlobalWindSpeed);
         if (showAdditionalProperties)
         {
             using (new IndentLevelScope())
             {
-                //if (hasCloudMap)
-                    //PropertyField(m_CloudMapSpeedMultiplier);
+                //PropertyField(m_CloudMapSpeedMultiplier);
                 PropertyField(m_ShapeSpeedMultiplier);
                 PropertyField(m_ErosionSpeedMultiplier);
             }
@@ -289,54 +310,55 @@ class VolumetricCloudsEditor : VolumeComponentEditor
 
         PropertyField(m_VerticalShapeWindSpeed);
         PropertyField(m_VerticalErosionWindSpeed);
+    }
 
-        //DrawHeader("Lighting");
+    void DrawLightingProperties()
+    {
+        PropertyField(m_AmbientLightProbeDimmer);
+        PropertyField(m_SunLightDimmer);
+        PropertyField(m_ErosionOcclusion);
+        PropertyField(m_ScatteringTint);
+        PropertyField(m_PowderEffectIntensity);
+        PropertyField(m_MultiScattering);
+    }
+
+    void DrawShadowProperties()
+    {
+        PropertyField(m_Shadows);
+        using (new IndentLevelScope())
         {
-            PropertyField(m_AmbientLightProbeDimmer);
-            PropertyField(m_SunLightDimmer);
-            PropertyField(m_ErosionOcclusion);
-            PropertyField(m_ScatteringTint);
-            PropertyField(m_PowderEffectIntensity);
-            PropertyField(m_MultiScattering);
+            PropertyField(m_ShadowResolution);
+            PropertyField(m_ShadowOpacity);
+            PropertyField(m_ShadowDistance);
+            PropertyField(m_ShadowOpacityFallback);
         }
+    }
 
-        //DrawHeader("Shadows");
+    void DrawQualityProperties()
+    {
+        PropertyField(m_TemporalAccumulationFactor);
+        //PropertyField(m_GhostingReduction);
+
+        // Here we intentionally choose to display the perceptual blending as a toggle and not as float value to prevent the user from inputing arbitrary values
+        // between 0.0f and 1.0f while preserving the ability to interpolate/blend between volumes.
+        using (var scope = new OverridablePropertyScope(m_PerceptualBlending, k_PerceptualBlending, this))
+            m_PerceptualBlending.value.floatValue = EditorGUILayout.Toggle(k_PerceptualBlending, m_PerceptualBlending.value.floatValue == 1.0f) ? 1.0f : 0.0f;
+
+        PropertyField(m_NumPrimarySteps);
+        PropertyField(m_NumLightSteps);
+        PropertyField(m_FadeInMode);
+        using (new IndentLevelScope())
         {
-            PropertyField(m_Shadows);
-            using (new IndentLevelScope())
+            if ((VolumetricClouds.CloudFadeInMode)m_FadeInMode.value.enumValueIndex == (VolumetricClouds.CloudFadeInMode.Manual))
             {
-                PropertyField(m_ShadowResolution);
-                PropertyField(m_ShadowOpacity);
-                PropertyField(m_ShadowDistance);
-                PropertyField(m_ShadowOpacityFallback);
-            }
-        }
-
-        //DrawHeader("Quality");
-        {
-            PropertyField(m_TemporalAccumulationFactor);
-            //PropertyField(m_GhostingReduction);
-
-            // Here we intentionally choose to display the perceptual blending as a toggle and not as float value to prevent the user from inputing arbitrary values
-            // between 0.0f and 1.0f while preserving the ability to interpolate/blend between volumes.
-            using (var scope = new OverridablePropertyScope(m_PerceptualBlending, k_PerceptualBlending, this))
-                m_PerceptualBlending.value.floatValue = EditorGUILayout.Toggle(k_PerceptualBlending, m_PerceptualBlending.value.floatValue == 1.0f) ? 1.0f : 0.0f;
-
-            PropertyField(m_NumPrimarySteps);
-            PropertyField(m_NumLightSteps);
-            PropertyField(m_FadeInMode);
-            using (new IndentLevelScope())
-            {
-                if ((VolumetricClouds.CloudFadeInMode)m_FadeInMode.value.enumValueIndex == (VolumetricClouds.CloudFadeInMode.Manual))
-                {
-                    PropertyField(m_FadeInStart);
-                    PropertyField(m_FadeInDistance);
-                }
+                PropertyField(m_FadeInStart);
+                PropertyField(m_FadeInDistance);
             }
         }
     }
+
     void LoadPresetValues(VolumetricClouds.CloudPresets preset, bool microDetails)
-        {
+    {
             switch (preset)
             {
                 case VolumetricClouds.CloudPresets.Sparse:
@@ -636,10 +658,10 @@ class VolumetricCloudsEditor : VolumeComponentEditor
 
             if (asset == null)
                 return null;
- 
+
             if (RenderDataListFieldInfo == null)
                 return null;
- 
+
             var renderDataList = (ScriptableRendererData[])RenderDataListFieldInfo.GetValue(asset);
             return renderDataList;
         }

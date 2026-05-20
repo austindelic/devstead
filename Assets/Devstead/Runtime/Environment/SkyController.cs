@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.Rendering;
+using Devstead.Environment;
 
 namespace Devstead.Rendering
 {
@@ -30,8 +31,6 @@ namespace Devstead.Rendering
         [SerializeField] private float nightSkyHiddenSunAltitude = -0.02f;
         [SerializeField] private float nightSkyEmissionMultiplier = 0.45f;
 
-        private static readonly int DevsteadNightWaterFactor = Shader.PropertyToID("_DevsteadNightWaterFactor");
-
         public Light Sun => sun;
         public Light Moon => moon;
         public Volume SkyVolume => skyVolume;
@@ -40,7 +39,7 @@ namespace Devstead.Rendering
             get => timeOfDay;
             set
             {
-                timeOfDay = Mathf.Repeat(value, 1.0f);
+                timeOfDay = SkyTime.Normalize(value);
                 ApplySky();
             }
         }
@@ -50,7 +49,7 @@ namespace Devstead.Rendering
             get => moonTimeOffset;
             set
             {
-                moonTimeOffset = Mathf.Repeat(value, 1.0f);
+                moonTimeOffset = SkyTime.Normalize(value);
                 ApplySky();
             }
         }
@@ -62,13 +61,13 @@ namespace Devstead.Rendering
 
         private void OnDisable()
         {
-            Shader.SetGlobalFloat(DevsteadNightWaterFactor, 0.0f);
+            Shader.SetGlobalFloat(DevsteadShaderPropertyIds.NightWaterFactor, 0.0f);
         }
 
         private void OnValidate()
         {
-            timeOfDay = Mathf.Repeat(timeOfDay, 1.0f);
-            moonTimeOffset = Mathf.Repeat(moonTimeOffset, 1.0f);
+            timeOfDay = SkyTime.Normalize(timeOfDay);
+            moonTimeOffset = SkyTime.Normalize(moonTimeOffset);
             ApplySky();
         }
 
@@ -76,7 +75,7 @@ namespace Devstead.Rendering
         {
             if (Application.isPlaying && animateInPlayMode)
             {
-                timeOfDay = Mathf.Repeat(timeOfDay + sunDegreesPerSecond * Time.deltaTime / 360.0f, 1.0f);
+                timeOfDay = SkyTime.AdvanceByDegrees(timeOfDay, sunDegreesPerSecond, Time.deltaTime);
             }
 
             ApplySky();
@@ -93,7 +92,7 @@ namespace Devstead.Rendering
             }
 
             var nightFade = CalculateNightFade();
-            Shader.SetGlobalFloat(DevsteadNightWaterFactor, nightFade);
+            Shader.SetGlobalFloat(DevsteadShaderPropertyIds.NightWaterFactor, nightFade);
             ApplyNightSkyEmission(nightFade);
         }
 
@@ -104,9 +103,7 @@ namespace Devstead.Rendering
                 return;
             }
 
-            var eulerAngles = baseEulerAngles;
-            eulerAngles.x = normalizedOrbit * 360.0f - 90.0f;
-            light.transform.rotation = Quaternion.Euler(eulerAngles);
+            light.transform.rotation = SkyOrbit.CreateDayArcRotation(baseEulerAngles, normalizedOrbit);
         }
 
         private float CalculateNightFade()
@@ -116,10 +113,8 @@ namespace Devstead.Rendering
                 return 0.0f;
             }
 
-            var sunDirection = -sun.transform.forward;
-            var sunAltitude = Vector3.Dot(sunDirection.normalized, Vector3.up);
-            var fade = Mathf.InverseLerp(nightSkyHiddenSunAltitude, nightSkyFullSunAltitude, sunAltitude);
-            return Mathf.SmoothStep(0.0f, 1.0f, Mathf.Clamp01(fade));
+            var sunAltitude = SkyOrbit.CalculateSunAltitude(sun.transform.forward);
+            return NightSkyFade.Calculate(sunAltitude, nightSkyHiddenSunAltitude, nightSkyFullSunAltitude);
         }
 
         private void ApplyNightSkyEmission(float nightFade)
@@ -135,7 +130,7 @@ namespace Devstead.Rendering
             }
 
             physicallyBasedSky.spaceEmissionMultiplier.overrideState = true;
-            physicallyBasedSky.spaceEmissionMultiplier.value = nightSkyEmissionMultiplier * nightFade;
+            physicallyBasedSky.spaceEmissionMultiplier.value = NightSkyFade.CalculateEmissionMultiplier(nightSkyEmissionMultiplier, nightFade);
         }
     }
 }

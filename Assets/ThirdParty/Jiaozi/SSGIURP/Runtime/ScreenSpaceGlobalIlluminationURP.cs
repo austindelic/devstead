@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using System.Collections.Generic;
 using Unity.Collections;
 using UnityEngine;
@@ -126,19 +125,8 @@ public class ScreenSpaceGlobalIlluminationURP : ScriptableRendererFeature
     private BackfaceDataPass m_BackfaceDataPass;
     private ForwardGBufferPass m_ForwardGBufferPass;
 
-    // Used in Forward GBuffer render pass
-    private readonly static FieldInfo gBufferFieldInfo = typeof(UniversalRenderer).GetField("m_GBufferPass", BindingFlags.NonPublic | BindingFlags.Instance);
-
-    private readonly static FieldInfo motionVectorPassFieldInfo = typeof(UniversalRenderer).GetField("m_MotionVectorPass", BindingFlags.NonPublic | BindingFlags.Instance);
-
-    // [Resolve Later] The "_CameraNormalsTexture" still exists after disabling DepthNormals Prepass, which may cause issue during rendering.
-    // So instead of checking the RTHandle, we need to check if DepthNormals Prepass is enqueued.
-    //private readonly static FieldInfo normalsTextureFieldInfo = typeof(UniversalRenderer).GetField("m_NormalsTexture", BindingFlags.NonPublic | BindingFlags.Instance);
-
-    // Avoid printing messages every frame
-    private bool isShaderMismatchLogPrinted = false;
-    private bool isDebuggerLogPrinted = false;
-    private bool isBackfaceLightingLogPrinted = false;
+    private SSGIRuntimeLogFlags m_RuntimeLogFlags;
+    private bool m_HasShaderMismatch;
 
     // SSGI Shader Property IDs
     private static readonly int _MaxSteps = Shader.PropertyToID("_MaxSteps");
@@ -249,18 +237,15 @@ public class ScreenSpaceGlobalIlluminationURP : ScriptableRendererFeature
 
     public override void Create()
     {
-        if (m_Shader != Shader.Find(m_SSGIShaderName))
+        m_HasShaderMismatch = m_Shader != Shader.Find(m_SSGIShaderName);
+        if (m_HasShaderMismatch)
         {
         #if UNITY_EDITOR || DEBUG
-            Debug.LogErrorFormat("Screen Space Global Illumination URP: Material is not using {0} shader.", m_SSGIShaderName);
-            isShaderMismatchLogPrinted = true;
+            SSGILogging.LogOnce(ref m_RuntimeLogFlags, SSGIRuntimeLogFlags.ShaderMismatch, string.Format("Screen Space Global Illumination URP: Material is not using {0} shader.", m_SSGIShaderName), true);
         #endif
             return;
         }
-        else
-        {
-            isShaderMismatchLogPrinted = false;
-        }
+        SSGILogging.Clear(ref m_RuntimeLogFlags, SSGIRuntimeLogFlags.ShaderMismatch);
 
         m_SSGIMaterial = CoreUtils.CreateEngineMaterial(m_Shader);
 
@@ -278,9 +263,13 @@ public class ScreenSpaceGlobalIlluminationURP : ScriptableRendererFeature
         {
             m_SSGIPass = new ScreenSpaceGlobalIlluminationPass(m_SSGIMaterial);
         #if UNITY_6000_0_OR_NEWER
+        #if UNITY_6000_4_OR_NEWER
+            m_SSGIPass.renderPassEvent = RenderPassEvent.AfterRenderingSkybox;
+        #else
             var renderGraphSettings = GraphicsSettings.GetRenderPipelineSettings<RenderGraphSettings>();
             bool enableRenderGraph = renderGraphSettings == null || !renderGraphSettings.enableRenderCompatibilityMode;
             m_SSGIPass.renderPassEvent = enableRenderGraph ? RenderPassEvent.AfterRenderingSkybox : RenderPassEvent.BeforeRenderingTransparents;
+        #endif
         #else
             m_SSGIPass.renderPassEvent = RenderPassEvent.BeforeRenderingTransparents; // We cannot move to after skybox because of the motion vectors issue
         #endif
@@ -326,7 +315,7 @@ public class ScreenSpaceGlobalIlluminationURP : ScriptableRendererFeature
     public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
     {
         // Do not add render passes if any error occurs.
-        if (isShaderMismatchLogPrinted)
+        if (m_HasShaderMismatch)
             return;
 
         if (renderingData.cameraData.camera.cameraType == CameraType.Preview)
@@ -346,10 +335,10 @@ public class ScreenSpaceGlobalIlluminationURP : ScriptableRendererFeature
     #if UNITY_EDITOR || DEBUG
         if (isDebugger && !m_RenderingDebugger)
         {
-            if (!isDebuggerLogPrinted) { Debug.Log("Screen Space Global Illumination URP: Disable effect to avoid affecting rendering debugging."); isDebuggerLogPrinted = true; }
+            SSGILogging.LogOnce(ref m_RuntimeLogFlags, SSGIRuntimeLogFlags.RenderingDebuggerDisabled, "Screen Space Global Illumination URP: Disable effect to avoid affecting rendering debugging.");
         }
         else
-            isDebuggerLogPrinted = false;
+            SSGILogging.Clear(ref m_RuntimeLogFlags, SSGIRuntimeLogFlags.RenderingDebuggerDisabled);
     #endif
 
         // Per 8 steps: 1 small steps, 2 medium steps, 5 large steps
@@ -446,14 +435,9 @@ public class ScreenSpaceGlobalIlluminationURP : ScriptableRendererFeature
         if (renderingData.cameraData.camera.cameraType != CameraType.Preview && (!isDebugger || m_RenderingDebugger))
             renderer.EnqueuePass(m_SSGIPass);
 
-        // For Unity 6.1+:
-        // TODO: the following code will cause issues when using "Deferred+" and disabling Render Graph (URP will fall back to "Forward+")
-        // Solution: when using "Deferred+" & "RG Compatibility Mode", we should enqueue the Forward GBuffer pass
-
-        // If GBuffer exists, URP is in Deferred path. (Actual rendering mode can be different from settings, such as URP forces Forward on OpenGL)
-        bool isUsingDeferred = gBufferFieldInfo.GetValue(renderer) != null;
-        // OpenGL won't use deferred path.
-        isUsingDeferred &= (SystemInfo.graphicsDeviceType != GraphicsDeviceType.OpenGLES3) & (SystemInfo.graphicsDeviceType != GraphicsDeviceType.OpenGLCore);  // GLES 2 is deprecated.
+        // Treat a live URP GBuffer pass as Deferred. URP settings can still fall back to Forward on
+        // some platforms, so OpenGL is explicitly excluded before deciding which supplemental passes run.
+        bool isUsingDeferred = SSGIURPPrivateAccess.IsDeferredPathActive(renderer);
 
         bool renderBackfaceData = ssgiVolume.thicknessMode.value != ScreenSpaceGlobalIlluminationVolume.ThicknessMode.Constant;
         if (renderBackfaceData)
@@ -488,14 +472,14 @@ public class ScreenSpaceGlobalIlluminationURP : ScriptableRendererFeature
     #if UNITY_EDITOR || DEBUG
         if (m_BackfaceLighting && isUsingDeferred)
         {
-            if (!isBackfaceLightingLogPrinted) { Debug.LogError("Screen Space Global Illumination URP: Backface Lighting is only supported on Forward(+) rendering path."); isBackfaceLightingLogPrinted = true; }
+            SSGILogging.LogOnce(ref m_RuntimeLogFlags, SSGIRuntimeLogFlags.BackfaceLightingDeferred, "Screen Space Global Illumination URP: Backface Lighting is only supported on Forward(+) rendering path.", true);
         }
         else
-            isBackfaceLightingLogPrinted = false;
+            SSGILogging.Clear(ref m_RuntimeLogFlags, SSGIRuntimeLogFlags.BackfaceLightingDeferred);
     #endif
 
-        // Render Forward GBuffer pass if the current device supports MRT.
-        // Assuming the current device supports at least 4 MRTs since we require Unity shader model 3.5
+        // Forward paths do not provide URP GBuffers, so SSGI renders a minimal local set.
+        // The shader model requirement assumes the current device supports at least 4 MRTs.
         if (!isUsingDeferred)
         {
             renderer.EnqueuePass(m_ForwardGBufferPass);
@@ -518,12 +502,11 @@ public class ScreenSpaceGlobalIlluminationURP : ScriptableRendererFeature
 
         private Matrix4x4 camVPMatrix;
         private Matrix4x4 prevCamVPMatrix;
+        private bool hasPreviousCameraViewProjection;
 
         // This pass is editor only
         const string _PrevViewProjMatrix = "_PrevViewProjMatrix";
         const string _NonJitteredViewProjMatrix = "_NonJitteredViewProjMatrix";
-        const string motionColorHandleName = "m_Color";
-        const string motionDepthHandleName = "m_Depth";
         public PreRenderScreenSpaceGlobalIlluminationPass() { }
 
 #if !UNITY_6000_0_OR_NEWER
@@ -537,19 +520,10 @@ public class ScreenSpaceGlobalIlluminationURP : ScriptableRendererFeature
                 cmd.SetGlobalMatrix(_PrevViewProjMatrix, prevCamVPMatrix);
                 cmd.SetGlobalMatrix(_NonJitteredViewProjMatrix, camVPMatrix);
                 prevCamVPMatrix = camVPMatrix;
-                var motionVectorPass = motionVectorPassFieldInfo.GetValue(renderingData.cameraData.renderer);
-                if (motionVectorPass != null)
+                if (SSGIURPPrivateAccess.TryGetMotionVectorTargets(renderingData.cameraData.renderer, out RTHandle motionColorHandle, out RTHandle motionDepthHandle))
                 {
-                    FieldInfo colorFieldInfo = motionVectorPass.GetType().GetField(motionColorHandleName, BindingFlags.NonPublic | BindingFlags.Instance);
-                    FieldInfo depthFieldInfo = motionVectorPass.GetType().GetField(motionDepthHandleName, BindingFlags.NonPublic | BindingFlags.Instance);
-                    if (colorFieldInfo != null && depthFieldInfo != null)
-                    {
-                        if (colorFieldInfo.GetValue(motionVectorPass) is RTHandle motionColorHandle && depthFieldInfo.GetValue(motionVectorPass) is RTHandle motionDepthHandle)
-                        {
-                            cmd.SetRenderTarget(motionColorHandle, motionDepthHandle);
-                            Blitter.BlitTexture(cmd, motionColorHandle, m_ScaleBias, m_SSGIMaterial, pass: 7);
-                        }
-                    }
+                    cmd.SetRenderTarget(motionColorHandle, motionDepthHandle);
+                    Blitter.BlitTexture(cmd, motionColorHandle, m_ScaleBias, m_SSGIMaterial, pass: 7);
                 }
             }
 
@@ -563,7 +537,11 @@ public class ScreenSpaceGlobalIlluminationURP : ScriptableRendererFeature
             var cameraData = renderingData.cameraData;
             var camera = cameraData.camera;
             camVPMatrix = GL.GetGPUProjectionMatrix(camera.nonJitteredProjectionMatrix, true) * cameraData.GetViewMatrix();
-            prevCamVPMatrix = prevCamVPMatrix == null ? camera.previousViewProjectionMatrix : prevCamVPMatrix;
+            if (!hasPreviousCameraViewProjection)
+            {
+                prevCamVPMatrix = camera.previousViewProjectionMatrix;
+                hasPreviousCameraViewProjection = true;
+            }
         }
         #endregion
 #endif
@@ -601,8 +579,9 @@ public class ScreenSpaceGlobalIlluminationURP : ScriptableRendererFeature
                 var camera = cameraData.camera;
                 camVPMatrix = GL.GetGPUProjectionMatrix(camera.nonJitteredProjectionMatrix, true) * cameraData.GetViewMatrix();
                 passData.camVPMatrix = camVPMatrix;
-                passData.prevCamVPMatrix = prevCamVPMatrix == null ? camera.previousViewProjectionMatrix : prevCamVPMatrix;
+                passData.prevCamVPMatrix = hasPreviousCameraViewProjection ? prevCamVPMatrix : camera.previousViewProjectionMatrix;
                 prevCamVPMatrix = camVPMatrix;
+                hasPreviousCameraViewProjection = true;
 
                 // This pass is editor only
                 builder.AllowGlobalStateModification(true);
@@ -1807,30 +1786,6 @@ public class ScreenSpaceGlobalIlluminationURP : ScriptableRendererFeature
         #endif
             cmd.SetGlobalTexture(gBuffer1, m_GBuffer1);
 
-            // [Resolve Later] The "_CameraNormalsTexture" still exists after disabling DepthNormals Prepass, which may cause issue during rendering.
-            // So instead of checking the RTHandle, we need to check if DepthNormals Prepass is enqueued.
-
-            /*
-            // If "_CameraNormalsTexture" exists (lacking smoothness info), set the target to it instead of creating a new RT.
-            if (normalsTextureFieldInfo.GetValue(renderingData.cameraData.renderer) is not RTHandle normalsTextureHandle)
-            {
-                // NormalWS.rgb + Smoothness.a
-                desc.graphicsFormat = GetGBufferFormat(2);
-            #if UNITY_6000_0_OR_NEWER
-                RenderingUtils.ReAllocateHandleIfNeeded(ref m_GBuffer2, desc, FilterMode.Point, TextureWrapMode.Clamp, name: _GBuffer2);
-            #else
-                RenderingUtils.ReAllocateIfNeeded(ref m_GBuffer2, desc, FilterMode.Point, TextureWrapMode.Clamp, name: _GBuffer2);
-            #endif
-                cmd.SetGlobalTexture(gBuffer2, m_GBuffer2);
-                m_GBuffers = new RTHandle[] { m_GBuffer0, m_GBuffer1, m_GBuffer2 };
-            }
-            else
-            {
-                cmd.SetGlobalTexture(gBuffer2, normalsTextureHandle);
-                m_GBuffers = new RTHandle[] { m_GBuffer0, m_GBuffer1, normalsTextureHandle };
-            }
-            */
-
             // NormalWS.rgb + Smoothness.a
             desc.graphicsFormat = GetGBufferFormat(2);
         #if UNITY_6000_0_OR_NEWER
@@ -1936,24 +1891,6 @@ public class ScreenSpaceGlobalIlluminationURP : ScriptableRendererFeature
                 // Specular.rgb + Occlusion.a
                 desc.graphicsFormat = GetGBufferFormat(1);
                 TextureHandle gBuffer1Handle = UniversalRenderer.CreateRenderGraphTexture(renderGraph, desc, name: _GBuffer1, false, FilterMode.Point, TextureWrapMode.Clamp);
-
-                // [Resolve Later] The "_CameraNormalsTexture" still exists after disabling DepthNormals Prepass, which may cause issue during rendering.
-                // So instead of checking the RTHandle, we need to check if DepthNormals Prepass is enqueued.
-
-                /*
-                TextureHandle gBuffer2Handle;
-                // If "_CameraNormalsTexture" exists (lacking smoothness info), set the target to it instead of creating a new RT.
-                if (normalsTextureFieldInfo.GetValue(cameraData.renderer) is not RTHandle normalsTextureHandle)
-                {
-                    // NormalWS.rgb + Smoothness.a
-                    desc.graphicsFormat = GetGBufferFormat(2);
-                    gBuffer2Handle = UniversalRenderer.CreateRenderGraphTexture(renderGraph, desc, name: _GBuffer2, false, FilterMode.Point, TextureWrapMode.Clamp);
-                }
-                else
-                {
-                    gBuffer2Handle = resourceData.cameraNormalsTexture;
-                }
-                */
 
                 // NormalWS.rgb + Smoothness.a
                 desc.graphicsFormat = GetGBufferFormat(2);

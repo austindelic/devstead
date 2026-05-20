@@ -1,4 +1,5 @@
 using UnityEngine;
+using Devstead.Environment;
 
 namespace Devstead.Rendering
 {
@@ -11,12 +12,12 @@ namespace Devstead.Rendering
 
         private void Update()
         {
-            if (rotationAxis.sqrMagnitude <= Mathf.Epsilon)
+            if (!SkyOrbit.HasRotationAxis(rotationAxis))
             {
                 return;
             }
 
-            transform.Rotate(rotationAxis.normalized, rotationSpeedDegreesPerSecond * Time.deltaTime, Space.World);
+            transform.Rotate(SkyOrbit.NormalizeRotationAxis(rotationAxis), rotationSpeedDegreesPerSecond * Time.deltaTime, Space.World);
         }
     }
 }

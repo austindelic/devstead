@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
-using UnityEngine.Rendering.Universal.Internal;
 
 namespace Oceana {
     public class OceanaRenderFeature : ScriptableRendererFeature {
@@ -14,8 +13,6 @@ namespace Oceana {
         private OceanaUnderwaterPass m_UnderwaterPass;
 
         public override void Create() {
-            if (m_Settings == null) return;
-
             m_ScrollPass = new OceanaScrollPass(RenderPassEvent.BeforeRenderingOpaques);
             m_ScrollPass.FetchSettings(m_Settings);
 
@@ -27,8 +24,6 @@ namespace Oceana {
         }
 
         private void OnValidate() {
-            if (m_ScrollPass == null || m_SurfacePass == null || m_UnderwaterPass == null) return;
-            
             m_ScrollPass?.FetchSettings(m_Settings);
             m_SurfacePass?.FetchSettings(m_Settings);
             m_UnderwaterPass?.FetchSettings(m_Settings);
@@ -36,11 +31,15 @@ namespace Oceana {
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData) {
             if (m_ScrollPass == null || m_SurfacePass == null || m_UnderwaterPass == null) return;
-            if (renderingData.cameraData.camera.name.StartsWith(PlanarReflectionCameraName, System.StringComparison.Ordinal)) return;
+            if (m_Settings == null || IsPlanarReflectionCamera(renderingData.cameraData.camera)) return;
 
             renderer.EnqueuePass(m_ScrollPass);
             renderer.EnqueuePass(m_SurfacePass);
             renderer.EnqueuePass(m_UnderwaterPass);
+        }
+
+        private static bool IsPlanarReflectionCamera(Camera camera) {
+            return camera != null && camera.name.StartsWith(PlanarReflectionCameraName, System.StringComparison.Ordinal);
         }
 
         protected override void Dispose(bool disposing) {

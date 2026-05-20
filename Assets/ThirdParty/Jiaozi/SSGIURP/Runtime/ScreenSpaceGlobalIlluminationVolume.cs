@@ -34,13 +34,16 @@ using UnityEngine.Rendering.Universal;
 #if UNITY_2023_3_OR_NEWER
 [VolumeRequiresRendererFeatures(typeof(ScreenSpaceGlobalIlluminationURP))]
 #endif
+[DisplayInfo(name = "Screen Space Global Illumination")]
 [HelpURL("https://github.com/jiaozi158/UnitySSGIURP/blob/main/Documentation~/Documentation.md")]
 public sealed class ScreenSpaceGlobalIlluminationVolume : VolumeComponent, IPostProcessComponent
 {
+#if !UNITY_6000_3_OR_NEWER
     public ScreenSpaceGlobalIlluminationVolume()
     {
         displayName = "Screen Space Global Illumination";
     }
+#endif
 
 #if !UNITY_2023_2_OR_NEWER
     // This is unused since 2023.1

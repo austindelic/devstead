@@ -39,13 +39,13 @@ namespace Devstead.Editor.Rendering
         {
             var changed = false;
 
-            var pcRpAsset = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>("Assets/Settings/PC_RPAsset.asset");
+            var pcRpAsset = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(PcRenderPipelineAssetPath);
             if (pcRpAsset != null)
             {
                 changed |= ConfigureRenderPipelineAsset(pcRpAsset);
             }
 
-            var mobileRpAsset = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>("Assets/Settings/Mobile_RPAsset.asset");
+            var mobileRpAsset = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(MobileRenderPipelineAssetPath);
             if (mobileRpAsset != null)
             {
                 changed |= ConfigureRenderPipelineAsset(mobileRpAsset);

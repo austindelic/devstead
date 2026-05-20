@@ -17,6 +17,8 @@ namespace Devstead.Editor.Rendering
         private const string RenderingSettingsFolder = "Assets/Settings";
         private const string MainScenePath = "Assets/Devstead/Scenes/MainScene.unity";
         private const string VolumeProfilePath = "Assets/Devstead/Rendering/Profiles/MainSceneProfile.asset";
+        private const string PcRenderPipelineAssetPath = "Assets/Settings/PC_RPAsset.asset";
+        private const string MobileRenderPipelineAssetPath = "Assets/Settings/Mobile_RPAsset.asset";
         private const string MoonTexturePath = "Assets/Devstead/Rendering/Textures/MoonAlbedo.jpg";
         private const string OceanaSettingsPath = "Assets/ThirdParty/Oceana/Settings/OceanaSettings.asset";
         private const string MilkyWayHighQualityCubemapPath = "Assets/Devstead/Rendering/Textures/MilkyWayHighQuality.tif";
@@ -48,6 +50,14 @@ namespace Devstead.Editor.Rendering
         private const float SpaceEmissionTwinkleStrength = 0.06f;
         private const float MainCameraFarClipPlane = 5000.0f;
 
+        private static readonly SkyAndCloudsSetupStep[] SetupSteps =
+        {
+            new("Renderer Assets", ConfigureRendererAssets),
+            new("Volume Profile", ConfigureVolumeProfile),
+            new("Render Pipeline Assets", ConfigureRenderPipelineAssets),
+            new("Main Scene", ConfigureMainScene),
+        };
+
         [MenuItem(MenuPath)]
         public static void ApplyFromMenu()
         {
@@ -61,20 +71,49 @@ namespace Devstead.Editor.Rendering
 
         public static void Apply()
         {
-            var changedAssets = false;
+            var context = new SkyAndCloudsSetupContext();
 
-            changedAssets |= ConfigureRendererAssets();
-            changedAssets |= ConfigureVolumeProfile();
-            changedAssets |= ConfigureRenderPipelineAssets();
-            changedAssets |= ConfigureMainScene();
+            foreach (var step in SetupSteps)
+            {
+                context.Run(step);
+            }
 
-            if (changedAssets)
+            if (context.ChangedAssets)
             {
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
             }
 
             Debug.Log("Sky and Clouds setup complete.");
+        }
+
+        private readonly struct SkyAndCloudsSetupStep
+        {
+            public SkyAndCloudsSetupStep(string name, System.Func<bool> apply)
+            {
+                Name = name;
+                Apply = apply;
+            }
+
+            public string Name { get; }
+            public System.Func<bool> Apply { get; }
+        }
+
+        private sealed class SkyAndCloudsSetupContext
+        {
+            private readonly List<string> changedStepNames = new();
+
+            public bool ChangedAssets { get; private set; }
+            public IReadOnlyList<string> ChangedStepNames => changedStepNames;
+
+            public void Run(SkyAndCloudsSetupStep step)
+            {
+                if (step.Apply())
+                {
+                    ChangedAssets = true;
+                    changedStepNames.Add(step.Name);
+                }
+            }
         }
     }
 }

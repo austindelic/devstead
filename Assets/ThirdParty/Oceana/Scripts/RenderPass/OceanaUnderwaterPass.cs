@@ -9,7 +9,7 @@ namespace Oceana {
         private Material m_Material;
         private float m_SeaLevel;
         private float m_DisplaceHeight;
-        private Vector2 m_ScrollST;
+        private Vector4 m_ScrollST;
 
         private OceanaSettings m_Settings;
 
@@ -27,6 +27,7 @@ namespace Oceana {
             }
             else {
                 m_Settings = null;
+                m_Material = null;
             }
         }
 
@@ -42,13 +43,16 @@ namespace Oceana {
 
             public TextureHandle sourceColor;
             public TextureHandle sourceDepth;
-
-            public TextureHandle cameraColor;
         }
 
         public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData) {
             UniversalResourceData resourceData = frameData.Get<UniversalResourceData>();
-            ScreenCopyPassData copyData = frameData.Get<ScreenCopyPassData>();
+            OceanaScrollPass.ScrollGlobalData mapData = frameData.GetOrCreate<OceanaScrollPass.ScrollGlobalData>();
+            ScreenCopyPassData copyData = frameData.GetOrCreate<ScreenCopyPassData>();
+
+            if (!CanRender(resourceData, mapData, copyData)) {
+                return;
+            }
 
             renderGraph.AddBlitPass(resourceData.activeColorTexture, copyData.sceneColor,
                 Vector2.one, Vector2.zero, filterMode: RenderGraphUtils.BlitFilterMode.ClampNearest);
@@ -56,12 +60,9 @@ namespace Oceana {
                 Vector2.one, Vector2.zero, filterMode: RenderGraphUtils.BlitFilterMode.ClampNearest);
 
             using (IRasterRenderGraphBuilder builder = renderGraph.AddRasterRenderPass(passName, out UnderwaterPassData passData)) {
-                UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
-                OceanaScrollPass.ScrollGlobalData mapData = frameData.Get<OceanaScrollPass.ScrollGlobalData>();
                 ScreenCopyPassData screenData = frameData.Get<ScreenCopyPassData>();
 
                 passData.scrollMap = mapData.scrollMap;
-                passData.cameraColor = resourceData.activeColorTexture;
                 passData.sourceColor = screenData.sceneColor;
                 passData.sourceDepth = screenData.sceneDepth;
 
@@ -75,14 +76,23 @@ namespace Oceana {
         }
 
         private void Execute(UnderwaterPassData data, RasterGraphContext context) {
-            m_Material.SetFloat("_SeaLevel", m_SeaLevel);
-            m_Material.SetFloat("_DisplaceHeight", m_DisplaceHeight);
-            m_Material.SetVector("_ScrollMap_ST", m_ScrollST);
+            m_Material.SetFloat(OceanaShaderIds.SeaLevel, m_SeaLevel);
+            m_Material.SetFloat(OceanaShaderIds.DisplaceHeight, m_DisplaceHeight);
+            m_Material.SetVector(OceanaShaderIds.ScrollMapST, m_ScrollST);
 
-            m_Material.SetTexture("_ScrollMap", data.scrollMap);
-            m_Material.SetTexture("_SourceColor", data.sourceColor);
-            m_Material.SetTexture("_SourceDepth", data.sourceDepth);
+            m_Material.SetTexture(OceanaShaderIds.ScrollMap, data.scrollMap);
+            m_Material.SetTexture(OceanaShaderIds.SourceColor, data.sourceColor);
+            m_Material.SetTexture(OceanaShaderIds.SourceDepth, data.sourceDepth);
             context.cmd.DrawProcedural(Matrix4x4.identity, m_Material, 0, MeshTopology.Quads, 6);
+        }
+
+        private bool CanRender(UniversalResourceData resourceData, OceanaScrollPass.ScrollGlobalData mapData, ScreenCopyPassData copyData) {
+            return m_Material != null
+                && resourceData.activeColorTexture.IsValid()
+                && resourceData.activeDepthTexture.IsValid()
+                && mapData.scrollMap.IsValid()
+                && copyData.sceneColor.IsValid()
+                && copyData.sceneDepth.IsValid();
         }
 
         public void Dispose() {

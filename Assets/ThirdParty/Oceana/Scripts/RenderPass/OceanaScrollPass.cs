@@ -17,6 +17,8 @@ namespace Oceana {
         private int m_ScrollCount;
         private int m_Resolution;
         private int m_MipLevel;
+        private RTHandle m_ScrollArrayHandle;
+        private RTHandle m_ScrollMapHandle;
 
         private OceanaSettings m_Settings;
 
@@ -34,18 +36,29 @@ namespace Oceana {
             }
             else {
                 m_Settings = null;
+                m_Shader = null;
+                m_ScrollArray = null;
+                m_ScrollArrayST = null;
+                m_ScrollCount = 0;
+                ReleaseScrollArrayHandle();
             }
         }
 
         private void FetchProperties() {
+            ReleaseScrollArrayHandle();
+
             m_Shader = m_Settings.ScrollShader;
             m_ScrollArray = m_Settings.ScrollArray;
             m_ScrollFormat = m_Settings.ScrollFormat;
             m_ScrollArrayST = m_Settings.ScrollArrayST;
 
             m_Resolution = (int)m_Settings.ScrollResolution;
-            m_ScrollCount = m_ScrollArray.depth;
-            m_MipLevel = Mathf.Clamp(m_ScrollArray.width / m_Resolution, 1, m_ScrollArray.mipmapCount) - 1;
+            m_ScrollCount = m_ScrollArray == null ? 0 : m_ScrollArray.depth;
+            m_MipLevel = m_ScrollArray == null ? 0 : Mathf.Clamp(m_ScrollArray.width / m_Resolution, 1, m_ScrollArray.mipmapCount) - 1;
+
+            if (m_ScrollArray != null) {
+                m_ScrollArrayHandle = RTHandles.Alloc(m_ScrollArray);
+            }
         }
 
         public class ScrollGlobalData : ContextItem {
@@ -57,16 +70,17 @@ namespace Oceana {
         }
 
         private class ScrollPassData {
-            internal RTHandle scrollRT;
-
             internal TextureHandle scrollFetch;
             internal TextureHandle scrollOutput;
         }
 
         public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData) {
+            if (!CanRender()) {
+                return;
+            }
+
             using (IComputeRenderGraphBuilder builder = renderGraph.AddComputePass(passName, out ScrollPassData passData)) {
-                RTHandle scrollArrayRT = RTHandles.Alloc(m_ScrollArray);
-                passData.scrollFetch = renderGraph.ImportTexture(scrollArrayRT);
+                passData.scrollFetch = renderGraph.ImportTexture(m_ScrollArrayHandle);
 
                 RenderTextureDescriptor scrollMapDesc = new RenderTextureDescriptor(m_Resolution, m_Resolution) {
                     useMipMap = true,
@@ -75,8 +89,8 @@ namespace Oceana {
                     sRGB = false,
                     enableRandomWrite = true
                 };
-                RenderingUtils.ReAllocateHandleIfNeeded(ref passData.scrollRT, in scrollMapDesc, FilterMode.Bilinear, TextureWrapMode.Repeat);
-                passData.scrollOutput = renderGraph.ImportTexture(passData.scrollRT);
+                RenderingUtils.ReAllocateHandleIfNeeded(ref m_ScrollMapHandle, in scrollMapDesc, FilterMode.Bilinear, TextureWrapMode.Repeat);
+                passData.scrollOutput = renderGraph.ImportTexture(m_ScrollMapHandle);
 
                 ScrollGlobalData mapData = frameData.GetOrCreate<ScrollGlobalData>();
                 mapData.scrollMap = passData.scrollOutput;
@@ -89,23 +103,41 @@ namespace Oceana {
         }
 
         private void Execute(ScrollPassData data, ComputeGraphContext context) {
-            context.cmd.SetComputeVectorArrayParam(m_Shader, "_ScrollArray_ST", m_ScrollArrayST);
-            context.cmd.SetComputeIntParam(m_Shader, "_ScrollCount", m_ScrollCount);
-            context.cmd.SetComputeFloatParam(m_Shader, "_Time", Time.time);
+            context.cmd.SetComputeVectorArrayParam(m_Shader, OceanaShaderIds.ScrollArrayST, m_ScrollArrayST);
+            context.cmd.SetComputeIntParam(m_Shader, OceanaShaderIds.ScrollCount, m_ScrollCount);
+            context.cmd.SetComputeFloatParam(m_Shader, OceanaShaderIds.Time, Time.time);
 
-            context.cmd.SetComputeTextureParam(m_Shader, k_KernelID, "_ScrollArray", data.scrollFetch);
+            context.cmd.SetComputeTextureParam(m_Shader, k_KernelID, OceanaShaderIds.ScrollArray, data.scrollFetch);
 
-            context.cmd.SetComputeIntParam(m_Shader, "_ScrollResolution", m_Resolution);
-            context.cmd.SetComputeIntParam(m_Shader, "_MipLevel", m_MipLevel);
+            context.cmd.SetComputeIntParam(m_Shader, OceanaShaderIds.ScrollResolution, m_Resolution);
+            context.cmd.SetComputeIntParam(m_Shader, OceanaShaderIds.MipLevel, m_MipLevel);
 
-            context.cmd.SetComputeTextureParam(m_Shader, k_KernelID, "_ScrollMap", data.scrollOutput);
+            context.cmd.SetComputeTextureParam(m_Shader, k_KernelID, OceanaShaderIds.ScrollMap, data.scrollOutput);
             context.cmd.DispatchCompute(m_Shader, k_KernelID, m_Resolution / k_GroupX, m_Resolution / k_GroupY, 1);
 
-            data.scrollRT.rt.GenerateMips();
+            m_ScrollMapHandle.rt.GenerateMips();
+        }
+
+        private bool CanRender() {
+            return m_Shader != null
+                && m_ScrollArray != null
+                && m_ScrollArrayHandle != null
+                && m_ScrollArrayST != null
+                && m_ScrollArrayST.Length >= m_ScrollCount
+                && m_ScrollCount > 0
+                && m_Resolution > 0;
         }
 
         public void Dispose() {
             if (m_Settings != null) m_Settings.OnUpdate -= FetchProperties;
+            ReleaseScrollArrayHandle();
+            m_ScrollMapHandle?.Release();
+            m_ScrollMapHandle = null;
+        }
+
+        private void ReleaseScrollArrayHandle() {
+            m_ScrollArrayHandle?.Release();
+            m_ScrollArrayHandle = null;
         }
     }
 }
