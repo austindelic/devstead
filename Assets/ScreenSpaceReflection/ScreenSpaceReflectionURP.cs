@@ -256,6 +256,18 @@ public class ScreenSpaceReflectionURP : ScriptableRendererFeature
         private static readonly int stepSizeMultiplier = Shader.PropertyToID("_StepSizeMultiplier");
         private static readonly int maxStep = Shader.PropertyToID("_MaxStep");
         private static readonly int downSample = Shader.PropertyToID("_DownSample");
+        private static readonly int[] gBufferShaderPropertyIDs =
+        {
+            Shader.PropertyToID("_GBuffer0"),
+            Shader.PropertyToID("_GBuffer1"),
+            Shader.PropertyToID("_GBuffer2")
+        };
+
+        private bool hasLoggedMissingGBuffer;
+
+        private class GBufferGlobalsPassData
+        {
+        }
 
         public Unity6ScreenSpaceReflectionPass(Resolution resolution, MipmapsMode mipmapsMode, Material material)
         {
@@ -285,13 +297,20 @@ public class ScreenSpaceReflectionURP : ScriptableRendererFeature
                 return;
 
             TextureHandle[] gBuffers = resourceData.gBuffer;
-            if (gBuffers == null || gBuffers.Length < 3 || !gBuffers[2].IsValid())
+            if (gBuffers == null || gBuffers.Length < 3 || !gBuffers[0].IsValid() || !gBuffers[1].IsValid() || !gBuffers[2].IsValid())
             {
-                Debug.LogWarning("Screen Space Reflection URP: Unity 6 RenderGraph path requires URP Deferred rendering with valid GBuffer textures.");
+                if (!hasLoggedMissingGBuffer)
+                {
+                    Debug.LogWarning("Screen Space Reflection URP: Unity 6 RenderGraph path requires URP Deferred rendering with valid GBuffer textures.");
+                    hasLoggedMissingGBuffer = true;
+                }
+
                 return;
             }
+            hasLoggedMissingGBuffer = false;
 
             ApplyMaterialSettings(ssrVolume);
+            SetGlobalGBufferTextures(renderGraph, gBuffers);
 
             ssrMaterial.DisableKeyword("_BACKFACE_ENABLED");
             if (mipmapsMode == MipmapsMode.Trilinear)
@@ -319,10 +338,31 @@ public class ScreenSpaceReflectionURP : ScriptableRendererFeature
 
             TextureHandle reflectionTexture = renderGraph.CreateTexture(reflectionDesc);
             var ssrBlit = new UnityEngine.Rendering.RenderGraphModule.Util.RenderGraphUtils.BlitMaterialParameters(sourceCopy, reflectionTexture, ssrMaterial, 0);
-            renderGraph.AddBlitPass(ssrBlit, passName: "Screen Space Reflection");
+            using (var builder = renderGraph.AddBlitPass(ssrBlit, passName: "Screen Space Reflection", returnBuilder: true))
+            {
+                builder.UseAllGlobalTextures(true);
+            }
 
             var compositeBlit = new UnityEngine.Rendering.RenderGraphModule.Util.RenderGraphUtils.BlitMaterialParameters(reflectionTexture, source, ssrMaterial, 1);
-            renderGraph.AddBlitPass(compositeBlit, passName: "Composite Screen Space Reflection");
+            using (var builder = renderGraph.AddBlitPass(compositeBlit, passName: "Composite Screen Space Reflection", returnBuilder: true))
+            {
+                builder.UseAllGlobalTextures(true);
+            }
+        }
+
+        private static void SetGlobalGBufferTextures(RenderGraph renderGraph, TextureHandle[] gBuffers)
+        {
+            using (var builder = renderGraph.AddRasterRenderPass<GBufferGlobalsPassData>("Set Screen Space Reflection GBuffer Globals", out _))
+            {
+                builder.AllowPassCulling(false);
+
+                for (int i = 0; i < gBufferShaderPropertyIDs.Length; i++)
+                {
+                    builder.SetGlobalTextureAfterPass(gBuffers[i], gBufferShaderPropertyIDs[i]);
+                }
+
+                builder.SetRenderFunc(static (GBufferGlobalsPassData data, RasterGraphContext context) => { });
+            }
         }
 
         private void ApplyMaterialSettings(ScreenSpaceReflection volume)

@@ -24,7 +24,7 @@ namespace Devstead.Editor.Rendering
                 var skyFeature = GetOrCreateRendererFeature<PhysicallyBasedSkyURP>(rendererData, "Physically Based Sky URP", ref changed);
                 var cloudsFeature = GetOrCreateRendererFeature<VolumetricCloudsURP>(rendererData, "VolumetricCloudsURP", ref changed);
                 var oceanaFeature = GetOrCreateRendererFeature<OceanaRenderFeature>(rendererData, "Oceana", ref changed);
-                changed |= ConfigureRendererData(rendererData);
+                changed |= ConfigureRendererData(rendererData, isMobileRenderer);
                 changed |= ConfigureScreenSpaceGlobalIlluminationFeature(rendererData, isMobileRenderer);
                 changed |= ConfigureScreenSpaceReflectionFeature(rendererData, isMobileRenderer);
                 changed |= ConfigureRendererFeature(skyFeature, isMobileRenderer);
@@ -297,12 +297,13 @@ namespace Devstead.Editor.Rendering
             return changed;
         }
 
-        private static bool ConfigureRendererData(UniversalRendererData rendererData)
+        private static bool ConfigureRendererData(UniversalRendererData rendererData, bool isMobileRenderer)
         {
             var changed = false;
             var rendererObject = new SerializedObject(rendererData);
+            var renderingMode = isMobileRenderer ? RenderingMode.ForwardPlus : RenderingMode.DeferredPlus;
 
-            changed |= SetEnum(rendererObject, "m_RenderingMode", 2);
+            changed |= SetInt(rendererObject, "m_RenderingMode", (int)renderingMode);
 
             if (changed)
             {
